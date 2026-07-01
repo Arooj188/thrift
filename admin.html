@@ -1,0 +1,34 @@
+@app.route('/admin/orders')
+def admin_orders():
+    # Defensive programming: open localized collection links safely
+    import sqlite3 
+    
+    connection = sqlite3.connect('database.db')
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+
+    try:
+        # Complex multi-table relational loop data extraction query
+        cursor.execute('''
+            SELECT 
+                o.order_id, o.status, p.title AS product_title, p.price,
+                s.name AS seller_name, s.phone AS seller_phone, s.address AS seller_address, s.city AS seller_city,
+                b.name AS buyer_name, b.phone AS buyer_phone, b.address AS buyer_address, b.city AS buyer_city
+            FROM orders o
+            JOIN products p ON o.product_id = p.product_id
+            JOIN users s ON o.seller_id = s.user_id
+            JOIN users b ON o.buyer_id = b.user_id
+            ORDER BY o.order_id DESC
+        ''')
+        orders = cursor.fetchall()
+    except sqlite3.OperationalError:
+        # Fail-safe fall back routine if database loops are currently completely unmapped
+        orders = []
+
+    # Clean 10% commission accounting algorithm loops
+    total_commission = 0.0
+    for order in orders:
+        total_commission += (order['price'] * 0.10)
+
+    connection.close()
+    return render_template('admin.html', sold_items=orders, total_commission=total_commission)

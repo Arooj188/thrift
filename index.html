@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="margin-bottom: 50px; border-bottom: 1px solid #f2efea; padding-bottom: 30px;">
+    <h1 style="font-size: 48px; font-weight: 800; margin: 0 0 10px 0; letter-spacing: -1px; color: #1c1c1c;">thrift marketplace</h1>
+    <p style="font-size: 16px; color: #767676; margin: 0; max-width: 550px; line-height: 1.6;">Pakistan's community-driven fashion space. Shop and sell pre-loved clothing and shoes directly from wardrobes nationwide.</p>
+</div>
+
+<h2 style="font-size: 22px; font-weight: 700; margin-bottom: 25px; color: #1c1c1c;">Recently Listed Archives</h2>
+
+{% if not products %}
+<p style="color: #767676; font-size: 14px; text-align: center; padding: 50px 0; background: white; border: 1px solid #e5e7eb; border-radius: 12px;">No active listings found. Click "List Item for Sale" to add clothes or shoes!</p>
+{% else %}
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 40px;">
+    {% for product in products %}
+    <!-- product-card enables the premium lift interaction, stagger delays entry dynamically -->
+    <a href="/product/{{ product.id }}" class="product-card stagger-{{ loop.index if loop.index <= 4 else 4 }}" style="text-decoration: none; color: inherit; display: block;">
+        <div style="height: 360px; background-color: #f2efea; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid #e5e7eb;">
+            {% if product.image_url %}
+            <img src="{{ url_for('static', filename=product.image_url) }}" style="width: 100%; height: 100%; object-fit: cover;">
+            {% endif %}
+            <span style="position: absolute; bottom: 15px; left: 15px; background: rgba(255,255,255,0.95); padding: 5px 10px; font-size: 11px; font-weight: 700; border-radius: 6px;">SIZE {{ product.size }}</span>
+        </div>
+        <div style="padding-top: 15px; padding-left: 5px;">
+            <div style="font-size: 11px; font-weight: 700; color: #767676; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">{{ product.brand }}</div>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0 0 8px 0; color: #1c1c1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ product.title }}</h3>
+            <div style="font-size: 18px; font-weight: 800; color: #1c1c1c;">Rs. {{ "{:,.2f}".format(product.asking_price) }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- About Section -->
+<section id="about" class="home-section">
+    <h2>About Our Marketplace</h2>
+    <p>
+        Welcome to Pakistan's premium community-driven thrift platform. We make it simple for fashion enthusiasts across the country to circularize their wardrobes directly from home. Every transaction supports conscious consumption while unlocking incredible value from pre-loved premium clothing and footwear collections.
+    </p>
+</section>
+
+<!-- Contact Section -->
+<section id="contact" class="home-section" style="margin-bottom: 80px;">
+    <h2>Contact & Support</h2>
+    <p>
+        Have questions about listing an item or checking delivery statuses? Our team is active to assist you. 
+        <br><br>
+        <strong>Email support:</strong> support@thrift.pk<br>
+    </p>
+</section>
+{% endblock %}

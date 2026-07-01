@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="form-box" style="max-width: 650px; margin-bottom: 40px;">
+    <h1 style="font-size: 32px; font-weight: 800; margin: 0 0 10px 0;">Track Your Orders</h1>
+    <p style="font-size: 14px; color: #767676; margin-bottom: 30px;">Type your purchase confirmation email to scan the SQLite tracking logs.</p>
+    
+    <form action="/orders" method="POST">
+        <div class="form-group">
+            <label>Purchase Email Address</label>
+            <input type="email" name="email" required value="{{ email }}" placeholder="name@domain.com">
+        </div>
+        <button type="submit" class="btn-submit">Search Database Registers</button>
+    </form>
+</div>
+
+{% if email %}
+<h2 style="font-size: 20px; font-weight: 700; margin-bottom: 20px;">Logged Purchases for: {{ email }}</h2>
+{% if not orders %}
+<p style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb; color: #767676; font-size: 14px;">No items match this account parameter inside the tracking archive registers.</p>
+{% else %}
+    {% for order in orders %}
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 25px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700;">{{ order.title }}</h3>
+            <p style="margin: 0 0 4px 0; font-size: 13px; color: #767676;">Brand Grouping: {{ order.brand }} | Disclosed Color: {{ order.color }}</p>
+            <p style="margin: 0; font-size: 13px; color: #2563eb;"><strong>Logistics Tracking Code:</strong> {{ order.tracking_number }}</p>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 18px; font-weight: 800; margin-bottom: 4px;">Rs. {{ "{:,.2f}".format(order.asking_price) }}</div>
+            <span style="background: #f2efea; padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 4px;">Fulfillment: Active</span>
+        </div>
+    </div>
+    {% endfor %}
+{% endif %}
+{% endif %}
+{% endblock %}
