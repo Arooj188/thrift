@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="form-box" style="max-width: 650px; margin-bottom: 40px;">
+    <h1 style="font-size: 32px; font-weight: 800; margin: 0 0 10px 0;">Track Your Orders</h1>
+    <p style="font-size: 14px; color: #767676; margin-bottom: 30px;">Type your purchase confirmation email to scan the SQLite tracking logs.</p>
+    
+    <form action="/orders" method="POST">
+        <div class="form-group">
+            <label>Purchase Email Address</label>
+            <input type="email" name="email" required value="{{ email }}" placeholder="name@domain.com">
+        </div>
+        <button type="submit" class="btn-submit">Search Database Registers</button>
+    </form>
+</div>
+
+{% if email %}
+<h2 style="font-size: 20px; font-weight: 700; margin-bottom: 20px;">Logged Purchases for: {{ email }}</h2>
+{% if not orders %}
+<p style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb; color: #767676; font-size: 14px;">No orders were found matching that email.</p>
+{% else %}
+    {% for order in orders %}
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 25px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
+            <div style="flex: 1; min-width: 250px;">
+                <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700;">{{ order.product_title }}</h3>
+                <p style="margin: 0 0 4px 0; font-size: 13px; color: #767676;">Brand: {{ order.brand }} | Size: {{ order.size }} | Color: {{ order.color }}</p>
+                <p style="margin: 6px 0 0 0; font-size: 13px; color: #2563eb;"><strong>Order Status:</strong> {{ order.status }}</p>
+                <p style="margin: 6px 0 0 0; font-size: 13px; color: #2563eb;"><strong>Tracking Code:</strong> {{ order.tracking_number }}</p>
+            </div>
+            <div style="text-align: right; flex: 0 0 180px;">
+                <div style="font-size: 18px; font-weight: 800; margin-bottom: 8px;">Rs. {{ "{:,.2f}".format(order.seller_amount + order.platform_commission) if order.seller_amount and order.platform_commission else '0.00' }}</div>
+                <span style="background: #f2efea; padding: 6px 12px; font-size: 11px; font-weight: 700; border-radius: 4px;">{{ order.status }}</span>
+            </div>
+        </div>
+        <div style="margin-top: 18px; font-size: 13px; color: #767676;">
+            <div><strong>Delivery Address:</strong> {{ order.buyer_street_address }}, {{ order.buyer_city }}, {{ order.buyer_province }}, {{ order.buyer_postal_code }}</div>
+            {% if order.delivery_note %}
+            <div><strong>Courier Note:</strong> {{ order.delivery_note }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% endif %}
+{% endif %}
+{% endblock %}

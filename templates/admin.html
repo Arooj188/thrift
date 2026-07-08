@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 30px; margin-top: 20px;">
+    <div style="display: flex; flex-wrap: wrap; gap: 24px;">
+        <div style="flex: 1; min-width: 220px; background: #f2efea; padding: 24px; border-radius: 16px;">
+            <h3 style="margin:0 0 12px 0; font-size: 16px; font-weight: 700;">Total Platform Volume</h3>
+            <p style="font-size: 28px; font-weight: 800; margin:0;">Rs. {{ "{:,.2f}".format(total_revenue) }}</p>
+        </div>
+        <div style="flex: 1; min-width: 220px; background: #f2efea; padding: 24px; border-radius: 16px;">
+            <h3 style="margin:0 0 12px 0; font-size: 16px; font-weight: 700;">Commission Collected</h3>
+            <p style="font-size: 28px; font-weight: 800; margin:0;">Rs. {{ "{:,.2f}".format(total_commission) }}</p>
+        </div>
+        <div style="flex: 1; min-width: 220px; background: #f2efea; padding: 24px; border-radius: 16px;">
+            <h3 style="margin:0 0 12px 0; font-size: 16px; font-weight: 700;">Pending Payouts</h3>
+            <p style="font-size: 28px; font-weight: 800; margin:0;">{{ pending_payouts }}</p>
+        </div>
+    </div>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden;">
+        <div style="background: #fbf9f6; padding: 24px; border-bottom: 1px solid #e5e7eb;"><h2 style="margin:0; font-size: 24px; font-weight: 700;">Order Ledger</h2></div>
+        <div>
+            {% if not sold_items %}
+                <p style="padding: 24px; color: #767676;">No orders recorded yet.</p>
+            {% else %}
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="text-align: left; color: #767676; font-size: 12px;">
+                            <th style="padding: 16px;">Order</th>
+                            <th style="padding: 16px;">Product</th>
+                            <th style="padding: 16px;">Seller</th>
+                            <th style="padding: 16px;">Status</th>
+                            <th style="padding: 16px;">Payout</th>
+                            <th style="padding: 16px;">Commission</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in sold_items %}
+                        <tr style="border-top: 1px solid #f2efea;">
+                            <td style="padding: 16px; font-size: 13px;">#{{ order.order_id }}<br><span style="color:#767676; font-size:12px;">{{ order.order_date }}</span></td>
+                            <td style="padding: 16px; font-size: 13px;">{{ order.product_title }}</td>
+                            <td style="padding: 16px; font-size: 13px;">{{ order.seller_name or '–' }}</td>
+                            <td style="padding: 16px; font-size: 13px;">{{ order.status }}</td>
+                            <td style="padding: 16px; font-size: 13px;">{{ order.payout_status }}</td>
+                            <td style="padding: 16px; font-size: 13px;">Rs. {{ "{:,.2f}".format(order.platform_commission or 0) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

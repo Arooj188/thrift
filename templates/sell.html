@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Custom local styles to enforce the wide, side-by-side professional layout -->
+<style>
+    .sell-form-box { 
+        max-width: 650px; 
+        margin: 40px auto; 
+        background: white; 
+        border: 1px solid #e5e7eb; 
+        padding: 40px; 
+        border-radius: 16px; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    }
+    .sell-form-group { 
+        margin-bottom: 25px; 
+    }
+    .sell-form-group label { 
+        display: block; 
+        font-size: 11px; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+        color: #767676; 
+        margin-bottom: 10px; 
+        letter-spacing: 0.5px; 
+    }
+    .sell-form-group input, .sell-form-group select { 
+        width: 100%; 
+        padding: 14px; 
+        border: 1px solid #dcd7ce; 
+        background-color: #fbf9f6; 
+        border-radius: 6px; 
+        box-sizing: border-box; 
+        font-size: 15px; 
+        color: #1c1c1c; 
+        outline: none; 
+    }
+    /* This makes your fields sit horizontally next to each other */
+    .sell-form-row { 
+        display: flex; 
+        gap: 20px; 
+    }
+    .sell-form-row .sell-form-group { 
+        flex: 1; 
+    }
+</style>
+
+<div class="sell-form-box">
+    <h1 style="font-family: Georgia, serif; font-size: 42px; font-weight: 400; margin: 0 0 10px 0; color: #1c1c1c;">Start Selling</h1>
+    <p style="font-size: 14px; color: #767676; margin-bottom: 40px; line-height: 1.6;">
+        Fill out the details below to display your pre-loved clothing or shoes on our marketplace.
+    </p>
+    
+    <form action="/sell" method="POST" enctype="multipart/form-data">
+        <div class="sell-form-group">
+            <label>Item Title / Name</label>
+            <input type="text" name="title" required placeholder="e.g. Vintage Leather Jacket">
+        </div>
+        
+        <!-- Row 1: Brand & Category -->
+        <div class="sell-form-row">
+            <div class="sell-form-group">
+                <label>Brand / Designer</label>
+                <input type="text" name="brand" required placeholder="e.g. Custom Boutique">
+            </div>
+            <div class="sell-form-group">
+                <label>Category</label>
+                <!-- Added id="categorySelect" hook for our script -->
+                <select name="category" id="categorySelect">
+                    <option value="Clothing">Clothing</option>
+                    <option value="Shoes">Shoes</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Row 2: Size & Color -->
+        <div class="sell-form-row">
+            <div class="sell-form-group">
+                <label>Size</label>
+                <input type="text" name="size" required placeholder="e.g. S, M, L">
+            </div>
+            <div class="sell-form-group">
+                <label>Color</label>
+                <input type="text" name="color" required placeholder="e.g. Black">
+            </div>
+        </div>
+        
+        <!-- Row 3: Times Worn & Condition Issues -->
+        <div class="sell-form-row">
+            <div class="sell-form-group">
+                <label>How Many Times Worn?</label>
+                <input type="number" name="times_worn" required min="0" placeholder="0">
+            </div>
+            <div class="sell-form-group">
+                <label>Any Tears, Stains or Holes?</label>
+                <!-- Added id="conditionDropdown" hook for our script -->
+                <select name="has_tears" id="conditionDropdown">
+                    <option value="None - Perfect Condition">None - Perfect Condition</option>
+                    <option value="Minor loose threads only">Minor loose threads only</option>
+                    <option value="Yes, small interior tear">Yes, small interior tear</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="sell-form-group">
+            <label>Describe the General Condition</label>
+            <input type="text" name="seller_condition" required placeholder="e.g. Worn twice, perfectly clean condition">
+        </div>
+        
+        <div class="sell-form-group">
+            <label>Your Pickup Address Location</label>
+            <input type="text" name="seller_address" required placeholder="e.g. House 12, Street 3, DHA Phase 5, Lahore">
+        </div>
+        
+        <div class="sell-form-group">
+            <label>Asking Price (Rs.)</label>
+            <input type="number" name="asking_price" required placeholder="e.g. 1500">
+        </div>
+        
+        <div class="sell-form-group" style="margin-top: 30px;">
+            <label>Upload High-Res Outfit Photo</label>
+                <input type="file" name="images" required multiple style="border: none; padding: 5px 0; background: none;">
+        <button type="submit" class="btn-submit" style="margin-top: 20px;">Submit Listing</button>
+    </form>
+</div>
+
+<!-- Lightweight script that alters condition choices based on active category context -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const categorySelect = document.getElementById('categorySelect');
+        const conditionDropdown = document.getElementById('conditionDropdown');
+
+        categorySelect.addEventListener('change', function() {
+            if (this.value === 'Shoes') {
+                // Inject specific footwear options into the input stream
+                conditionDropdown.innerHTML = `
+                    <option value="Brand New Condition with Box">Brand New Condition with Box</option>
+                    <option value="Slightly worn soles / Creased toe-box">Slightly worn soles / Creased toe-box</option>
+                    <option value="Heavy scuffs / Physical separation / Torn lining">Heavy scuffs / Physical separation / Torn lining</option>
+                `;
+            } else {
+                // Restore standard textile criteria options
+                conditionDropdown.innerHTML = `
+                    <option value="None - Perfect Condition">None - Perfect Condition</option>
+                    <option value="Minor loose threads only">Minor loose threads only</option>
+                    <option value="Yes, small interior tear">Yes, small interior tear</option>
+                `;
+            }
+        });
+    });
+</script>
+{% endblock %}

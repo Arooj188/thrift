@@ -1,0 +1,104 @@
+```html
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="hero">
+    <h1>thrift marketplace</h1>
+    <p>
+        Pakistan's community-driven fashion space. Shop and sell pre-loved clothing and shoes directly from wardrobes nationwide.
+    </p>
+</div>
+
+
+<h2 class="section-title">Recently Listed Archives</h2>
+
+
+{% if not products %}
+
+<div class="empty-box">
+    No active listings found. Click "List Item for Sale" to add clothes or shoes!
+</div>
+
+
+{% else %}
+
+<div class="products">
+
+    {% for product in products %}
+
+    <a href="/product/{{ product.id }}" class="product-card">
+
+        <div class="image-container">
+
+            {% if product.image_url %}
+            <img src="{{ url_for('static', filename=product.image_url) }}">
+            {% endif %}
+
+            <span class="size-tag">
+                SIZE {{ product.size }}
+            </span>
+
+        </div>
+
+
+        <div class="product-info">
+
+            <div class="brand">
+                {{ product.brand }}
+            </div>
+
+            <h3>
+                {{ product.title }}
+            </h3>
+
+            <div class="price">
+                Rs. {{ "{:,.2f}".format(product.asking_price) }}
+            </div>
+
+        </div>
+
+    </a>
+
+    {% endfor %}
+
+</div>
+
+{% endif %}
+
+
+
+<section id="about" class="home-section">
+
+    <h2>About Our Marketplace</h2>
+
+    <p>
+        Welcome to Pakistan's premium community-driven thrift platform.
+        We make it simple for fashion enthusiasts across the country to
+        circularize their wardrobes directly from home. Every transaction
+        supports conscious consumption while unlocking incredible value
+        from pre-loved premium clothing and footwear collections.
+    </p>
+
+</section>
+
+
+
+<section id="contact" class="home-section">
+
+    <h2>Contact & Support</h2>
+
+    <p>
+        Have questions about listing an item or checking delivery statuses?
+        Our team is active to assist you.
+        <br><br>
+
+        <strong>Email support:</strong> support@thrift.pk
+
+    </p>
+
+</section>
+
+
+{% endblock %}
+```

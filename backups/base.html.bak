@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>thrift</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #fbf9f6; margin: 0; padding: 0; color: #1c1c1c; scroll-behavior: smooth; }
+        
+        /* Navigation Bar Layout */
+        nav { background-color: #fbf9f6; padding: 25px 40px; display: flex; align-items: center; border-bottom: 1px solid #f2efea; position: sticky; top: 0; z-index: 100; }
+        
+        /* 3 Lines Hamburger Menu Button */
+        .hamburger-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #1c1c1c; padding: 0; margin-right: 25px; display: flex; flex-direction: column; gap: 5px; width: 25px; }
+        .hamburger-btn span { display: block; width: 100%; height: 2px; background-color: #1c1c1c; transition: 0.3s; }
+        
+        .nav-logo { font-size: 28px; font-weight: 800; color: #1c1c1c; text-decoration: none; letter-spacing: -1px; margin-right: auto; }
+        .nav-links { display: flex; align-items: center; gap: 30px; }
+        .nav-links a { text-decoration: none; color: #767676; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .nav-links a:hover { color: #1c1c1c; }
+        .btn-sell { background-color: #1c1c1c; color: #fbf9f6 !important; padding: 10px 20px; border-radius: 8px; transition: background 0.2s; }
+        .btn-sell:hover { background-color: #333333; }
+
+        /* Left Side Pop-out Menu Panel */
+        .sidebar { position: fixed; top: 0; left: -300px; width: 260px; height: 100%; background: #fbf9f6; border-right: 1px solid #f2efea; box-shadow: 5px 0 15px rgba(0,0,0,0.05); padding: 40px 20px; transition: left 0.3s ease; z-index: 200; box-sizing: border-box; }
+        .sidebar.active { left: 0; }
+        .sidebar-close { background: none; border: none; font-size: 28px; cursor: pointer; position: absolute; top: 20px; right: 20px; color: #767676; }
+        .sidebar-close:hover { color: #1c1c1c; }
+        .sidebar-menu { display: flex; flex-direction: column; gap: 20px; margin-top: 40px; }
+        .sidebar-menu h3 { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #767676; margin-bottom: 5px; }
+        .sidebar-menu a { text-decoration: none; color: #1c1c1c; font-size: 16px; font-weight: 500; padding: 5px 0; display: block; border-bottom: 1px solid transparent; }
+        .sidebar-menu a:hover { color: #767676; }
+
+        /* General Layout Elements */
+        .container { max-width: 1100px; margin: 40px auto; padding: 0 40px; }
+        .flash-msg { background-color: #f2efea; border-left: 3px solid #1c1c1c; color: #1c1c1c; padding: 16px; font-size: 14px; margin-bottom: 30px; }
+        
+        /* Homepage Info Footer Sections */
+        .home-section { margin-top: 100px; padding: 60px 0; border-top: 1px solid #f2efea; }
+        .home-section h2 { font-family: Georgia, serif; font-size: 32px; font-weight: 400; margin-bottom: 20px; }
+        .home-section p { color: #555555; line-height: 1.8; font-size: 15px; max-width: 700px; }
+
+        /* --- PREMIUM MOTION EFFECT STYLES --- */
+        
+        /* 1. Global smooth fade-in reveal animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 2. Micro-interactions: Smooth float upward and soft shadow for items */
+        .product-card {
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                        box-shadow 0.3s ease;
+            animation: fadeInUp 0.6s ease both;
+        }
+
+        .product-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 3. Micro-interactions: Soft transitions on all buttons and menu links */
+        .nav-links a, .btn-sell, .btn-submit, .sidebar-menu a, .hamburger-btn span {
+            transition: all 0.25s ease !important;
+        }
+
+        /* 4. Staggered Entry Rules: Delays execution row-by-row */
+        .stagger-1 { animation-delay: 0.1s; }
+        .stagger-2 { animation-delay: 0.2s; }
+        .stagger-3 { animation-delay: 0.3s; }
+        .stagger-4 { animation-delay: 0.4s; }
+    </style>
+</head>
+<body>
+
+    <!-- Left Side Slide-out Menu Panel -->
+    <div class="sidebar" id="leftSidebar">
+        <button class="sidebar-close" onclick="toggleMenu()">&times;</button>
+        <div class="sidebar-menu">
+            <h3>Categories</h3>
+            <a href="/">All Items</a>
+            <a href="/?category=Clothing">Clothing</a>
+            <a href="/?category=Shoes">Shoes</a>
+            
+            <h3 style="margin-top: 30px;">Explore</h3>
+            <a href="/#about">About Our Platform</a>
+            <a href="/#contact">Contact Support</a>
+        </div>
+    </div>
+
+    <!-- Main Navigation Bar with Left Hamburger Menu -->
+    <nav>
+        <button class="hamburger-btn" onclick="toggleMenu()">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <a href="/" class="nav-logo">thrift</a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            {% if session.user_id %}
+                <span style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: #1c1c1c; letter-spacing: 0.5px;">Hello, {{ session.user_name }}</span>
+                <a href="/logout">Logout</a>
+            {% else %}
+                <a href="/login">Login</a>
+                <a href="/signup">Sign Up</a>
+            {% endif %}
+            <a href="/orders">Track Orders</a>
+            <a href="/cart">Cart ({% if session.cart %}{{ session.cart|length }}{% else %}0{% endif %})</a>
+            {% if session.user_id %}
+                <a href="/seller/listings">My Listings</a>
+            {% endif %}
+            <a href="/sell" class="btn-sell">List Item for Sale</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="flash-msg">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- JavaScript to toggle Menu state -->
+    <script>
+        function toggleMenu() {
+            var sidebar = document.getElementById('leftSidebar');
+            if (sidebar.style.left === '0px') {
+                sidebar.style.left = '-300px';
+            } else {
+                sidebar.style.left = '0px';
+            }
+        }
+    </script>
+</body>
+</html>

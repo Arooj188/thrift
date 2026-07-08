@@ -1,0 +1,44 @@
+def analyze_item(category, times_worn, condition_issues):
+    """
+    Intelligent Local AI Rule Engine.
+    Dynamically scores and builds customized evaluation summaries based on category 
+    and structural integrity parameters.
+    """
+    # Start with a base clean score
+    score = 100
+    
+    # Calculate structural damage adjustments
+    if "Perfect" in condition_issues or "Brand New" in condition_issues:
+        damage_text = "No visible surface damage or structural tearing detected."
+    elif "Minor" in condition_issues or "Slightly worn" in condition_issues:
+        score -= 15
+        damage_text = "Minor superficial wear localized around standard flex joints."
+    else:
+        score -= 40
+        damage_text = "Significant structural degradation or wear anomalies identified."
+        
+    # Calculate mileage adjustments
+    worn_count = int(times_worn)
+    if worn_count == 0:
+        score -= 0
+        usage_text = "Item retains original structural integrity metrics matching unworn stock profiles."
+    elif worn_count <= 5:
+        score -= 10
+        usage_text = f"Item features low-mileage usage wear matrix reflecting {worn_count} previous cycles."
+    else:
+        score -= 25
+        usage_text = "Material shows advanced micro-abrasion profiles typical of heavy long-term wear."
+
+    # Enforce score boundaries (Never let it drop below 10 or go above 100)
+    score = max(10, min(score, 100))
+
+    # Generate customized aesthetic breakdowns based on multi-vendor category types
+    if category == "Shoes":
+        summary = f"Verified Footwear Entry. Outsole tread structure assessment: {damage_text} Flex footprint indicators: {usage_text}"
+    else:
+        summary = f"Verified Textile Entry. Fabric cross-weave integrity matrix: {damage_text} Tensile surface indicators: {usage_text}"
+
+    return {
+        "score": score,
+        "summary": summary
+    }

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 400px; margin: 50px auto; padding: 20px; border: 1px solid #f2efea; background: white; border-radius: 8px;">
+    <h2 style="font-family: Georgia, serif; margin-bottom: 20px;">Create an Account</h2>
+    
+    <form action="/signup" method="POST">
+        <div style="margin-bottom: 15px;">
+            <label>Full Name</label>
+            <input type="text" name="name" required style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>Username</label>
+            <input type="text" name="username" placeholder="Optional" style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>Email Address</label>
+            <input type="email" name="email" required style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>Password</label>
+            <input type="password" name="password" required style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>WhatsApp / Phone Number</label>
+            <input type="text" name="phone" placeholder="e.g., 03001234567" required style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>Complete Home Address (For Courier Pickup/Delivery)</label>
+            <textarea name="address" required style="width: 100%; padding: 8px; margin-top: 5px; height: 60px;"></textarea>
+        </div>
+        <div style="margin-bottom: 15px; display:flex; gap:20px;">
+            <div style="flex:1;">
+                <label>City</label>
+                <input type="text" name="city" placeholder="e.g., Lahore" required style="width: 100%; padding: 8px; margin-top: 5px;">
+            </div>
+            <div style="flex:1;">
+                <label>Province</label>
+                <input type="text" name="province" placeholder="e.g., Punjab" style="width: 100%; padding: 8px; margin-top: 5px;">
+            </div>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label>Postal Code</label>
+            <input type="text" name="postal_code" placeholder="e.g., 54000" style="width: 100%; padding: 8px; margin-top: 5px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label>Short Seller Bio</label>
+            <textarea name="bio" placeholder="Tell buyers what makes your closet special." style="width: 100%; padding: 8px; margin-top: 5px; height: 60px;"></textarea>
+        </div>
+        <button type="submit" style="background: black; color: white; border: none; padding: 12px; width: 100%; cursor: pointer;">Register</button>
+    </form>
+</div>
+{% endblock %}
