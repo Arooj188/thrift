@@ -14,6 +14,19 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 DATABASE_URL = os.environ.get('DATABASE_URL')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 
+
+def rows_as_dicts(cursor):
+    columns = [desc[0] for desc in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def row_as_dict(cursor):
+    row = cursor.fetchone()
+    if not row:
+        return None
+    columns = [desc[0] for desc in cursor.description]
+    return dict(zip(columns, row))
+
 def get_db_connection():
     if DATABASE_URL:
         import psycopg2
@@ -26,9 +39,26 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    # Keep table creation idempotent so startup is safe in all environments.
+    users_pk = 'SERIAL PRIMARY KEY' if DATABASE_URL else 'INTEGER PRIMARY KEY AUTOINCREMENT'
+    products_pk = 'SERIAL PRIMARY KEY' if DATABASE_URL else 'INTEGER PRIMARY KEY AUTOINCREMENT'
+    orders_pk = 'SERIAL PRIMARY KEY' if DATABASE_URL else 'INTEGER PRIMARY KEY AUTOINCREMENT'
+
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id {users_pk},
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            address TEXT NOT NULL,
+            city TEXT NOT NULL
+        )
+    ''')
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS Products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {products_pk},
             title TEXT NOT NULL,
             brand TEXT,
             category TEXT,
@@ -49,6 +79,17 @@ def init_db():
             buyer_name TEXT,
             buyer_email TEXT,
             payout_status TEXT DEFAULT 'Pending Delivery'
+        )
+    '''.format(products_pk=products_pk))
+
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS orders (
+            order_id {orders_pk},
+            product_id INTEGER NOT NULL,
+            buyer_id INTEGER NOT NULL,
+            seller_id INTEGER NOT NULL,
+            status TEXT DEFAULT 'Pending',
+            order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     conn.commit()
@@ -90,8 +131,7 @@ def index():
         cursor.execute("SELECT * FROM Products WHERE status = 'available'")
     
     if DATABASE_URL:
-        columns = [desc for desc in cursor.description]
-        products = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        products = rows_as_dicts(cursor)
     else:
         products = cursor.fetchall()
     conn.close()
@@ -103,8 +143,7 @@ def product_details(product_id):
     cursor = conn.cursor()
     if DATABASE_URL:
         cursor.execute("SELECT * FROM Products WHERE id = %s", (product_id,))
-        row = cursor.fetchone()
-        product = dict(zip([desc for desc in cursor.description], row)) if row else None
+        product = row_as_dict(cursor)
     else:
         product = cursor.execute("SELECT * FROM Products WHERE id = ?", (product_id,)).fetchone()
     conn.close()
@@ -131,8 +170,7 @@ def view_cart():
     placeholders = ','.join('%s' if DATABASE_URL else '?' for _ in session['cart'])
     cursor.execute(f"SELECT * FROM Products WHERE id IN ({placeholders}) AND status = 'available'", session['cart'])
     if DATABASE_URL:
-        columns = [desc for desc in cursor.description]
-        products = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        products = rows_as_dicts(cursor)
     else:
         products = cursor.fetchall()
     conn.close()
@@ -157,8 +195,7 @@ def checkout():
     placeholders = ','.join('%s' if DATABASE_URL else '?' for _ in session['cart'])
     cursor.execute(f"SELECT * FROM Products WHERE id IN ({placeholders}) AND status = 'available'", session['cart'])
     if DATABASE_URL:
-        columns = [desc for desc in cursor.description]
-        products = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        products = rows_as_dicts(cursor)
     else:
         products = cursor.fetchall()
     conn.close()
@@ -180,8 +217,7 @@ def place_order():
     placeholders = ','.join('%s' if DATABASE_URL else '?' for _ in session['cart'])
     cursor.execute(f"SELECT * FROM Products WHERE id IN ({placeholders}) AND status = 'available'", session['cart'])
     if DATABASE_URL:
-        columns = [desc for desc in cursor.description]
-        products = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        products = rows_as_dicts(cursor)
     else:
         products = cursor.fetchall()
         
@@ -244,11 +280,17 @@ def sell():
         # 4. Securely write this product into your database tables
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO Products (title, brand, category, size, color, asking_price, image_url, times_worn, seller_condition, has_tears, seller_address, quality_score, condition_summary, seller_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (title, brand, category, size, color, asking_price, image_url, int(times_worn), seller_condition, has_tears, seller_address, int(quality_score), condition_summary, session['user_id']))
+
+        if DATABASE_URL:
+            cursor.execute('''
+                INSERT INTO Products (title, brand, category, size, color, asking_price, image_url, times_worn, seller_condition, has_tears, seller_address, quality_score, condition_summary, seller_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (title, brand, category, size, color, asking_price, image_url, int(times_worn), seller_condition, has_tears, seller_address, int(quality_score), condition_summary, session['user_id']))
+        else:
+            cursor.execute('''
+                INSERT INTO Products (title, brand, category, size, color, asking_price, image_url, times_worn, seller_condition, has_tears, seller_address, quality_score, condition_summary, seller_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (title, brand, category, size, color, asking_price, image_url, int(times_worn), seller_condition, has_tears, seller_address, int(quality_score), condition_summary, session['user_id']))
         
         conn.commit()
         conn.close()
@@ -270,8 +312,7 @@ def track_orders():
         cursor = conn.cursor()
         if DATABASE_URL:
             cursor.execute("SELECT * FROM Products WHERE buyer_email = %s AND status = 'sold'", (email_searched,))
-            columns = [desc for desc in cursor.description]
-            orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            orders = rows_as_dicts(cursor)
         else:
             orders = cursor.execute("SELECT * FROM Products WHERE buyer_email = ? AND status = 'sold'", (email_searched,)).fetchall()
         conn.close()
@@ -283,8 +324,7 @@ def admin_portal():
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM Products WHERE status = 'sold'")
     if DATABASE_URL:
-        columns = [desc for desc in cursor.description]
-        sold_items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        sold_items = rows_as_dicts(cursor)
     else:
         sold_items = cursor.fetchall()
     conn.close()
@@ -292,7 +332,6 @@ def admin_portal():
     total_revenue = sum(item['asking_price'] for item in sold_items)
     total_commission = total_revenue * 0.15
     return render_template('admin.html', sold_items=sold_items, total_revenue=total_revenue, total_commission=total_commission)
-from flask import render_template, request, redirect, url_for, flash # Make sure these are imported at the top of app.py
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -305,23 +344,28 @@ def signup():
         address = request.form['address']
         city = request.form['city']
 
-        # Connect to your verified database
-        connection = sqlite3.connect('database.db')
+        connection = get_db_connection()
         cursor = connection.cursor()
 
         try:
-            # Insert the new user records into your database
-            cursor.execute('''
-                INSERT INTO users (name, email, password, phone, address, city)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (name, email, password, phone, address, city))
+            if DATABASE_URL:
+                cursor.execute('''
+                    INSERT INTO users (name, email, password, phone, address, city)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                ''', (name, email, password, phone, address, city))
+            else:
+                cursor.execute('''
+                    INSERT INTO users (name, email, password, phone, address, city)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (name, email, password, phone, address, city))
             
             connection.commit()
             print(f"Success: User {name} registered!")
             return redirect(url_for('index')) # Sends them back to home page after signing up
             
-        except sqlite3.IntegrityError:
+        except Exception:
             # This triggers if someone tries to sign up with an email that already exists
+            connection.rollback()
             print("Error: That email is already registered.")
             return "Email already exists! Please try another one."
             
@@ -330,7 +374,6 @@ def signup():
 
     # If they are just opening the page normally (GET request), show the form
     return render_template('signup.html')
-from flask import session # Make sure 'session' is in your imports at the top of app.py
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -338,14 +381,16 @@ def login():
         email = request.form['email']
         password = request.form['password']
 
-        connection = sqlite3.connect('database.db')
-        # This helper line makes the database return data as a dictionary instead of a plain tuple
-        connection.row_factory = sqlite3.Row 
+        connection = get_db_connection()
         cursor = connection.cursor()
 
         # Search for a user matching the provided email
-        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
-        user = cursor.fetchone()
+        if DATABASE_URL:
+            cursor.execute('SELECT user_id, name, password FROM users WHERE email = %s', (email,))
+            user = row_as_dict(cursor)
+        else:
+            cursor.execute('SELECT user_id, name, password FROM users WHERE email = ?', (email,))
+            user = cursor.fetchone()
         connection.close()
 
         # Check if the user exists and the password matches exactly
@@ -370,22 +415,24 @@ def logout():
 # --- PASTE THE ADMIN ROUTE CODE HERE ---
 @app.route('/admin/orders')
 def admin_orders():
-    connection = sqlite3.connect('database.db')
-    connection.row_factory = sqlite3.Row
+    connection = get_db_connection()
     cursor = connection.cursor()
 
     cursor.execute('''
         SELECT 
-            o.order_id, o.status, p.title AS product_title, p.price,
+            o.order_id, o.status, p.title AS product_title, p.asking_price AS price,
             s.name AS seller_name, s.phone AS seller_phone, s.address AS seller_address, s.city AS seller_city,
             b.name AS buyer_name, b.phone AS buyer_phone, b.address AS buyer_address, b.city AS buyer_city
         FROM orders o
-        JOIN products p ON o.product_id = p.product_id
+        JOIN Products p ON o.product_id = p.id
         JOIN users s ON o.seller_id = s.user_id
         JOIN users b ON o.buyer_id = b.user_id
         ORDER BY o.order_id DESC
     ''')
-    orders = cursor.fetchall()
+    if DATABASE_URL:
+        orders = rows_as_dicts(cursor)
+    else:
+        orders = cursor.fetchall()
 
     total_commission = 0.0
     for order in orders:
@@ -396,7 +443,4 @@ def admin_orders():
 # ---------------------------------------
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8080)
-
-if __name__ == '__main__':
-    app.run(debug=True, port=8080)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=os.environ.get('FLASK_DEBUG') == '1')

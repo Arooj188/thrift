@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: thrift-flask
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: thrift-db
+          property: connectionString
+
+databases:
+  - name: thrift-db
+    databaseName: thrift
+    user: thrift_user
