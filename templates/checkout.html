@@ -17,10 +17,6 @@
             <input type="text" name="buyer_name" required>
         </div>
         <div class="form-group">
-            <label>Email Address</label>
-            <input type="email" name="buyer_email" required>
-        </div>
-        <div class="form-group">
             <label>Phone Number</label>
             <input type="text" name="buyer_phone" required placeholder="e.g. 03001234567">
         </div>
@@ -33,12 +29,19 @@
             <input type="text" name="buyer_city" required placeholder="e.g. Lahore, Islamabad">
         </div>
         <div class="form-group">
-            <label>Province</label>
-            <input type="text" name="buyer_province" required placeholder="e.g. Punjab, Sindh">
+            <label>Shipping Company</label>
+            <select name="shipping_company" required>
+                <option value="TCS">TCS</option>
+                <option value="Leopards">Leopards</option>
+                <option value="M&P Courier">M&P Courier</option>
+            </select>
         </div>
         <div class="form-group">
-            <label>Postal Code</label>
-            <input type="text" name="buyer_postal_code" required>
+            <label>Payment Method</label>
+            <select name="payment_method" required>
+                <option value="COD">Cash on Delivery</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+            </select>
         </div>
         <div class="form-group">
             <label>Delivery Note</label>
@@ -49,3 +52,9 @@
     </form>
 </div>
 {% endblock %}
+<style>
+@media (max-width: 700px) {
+  .form-box { padding: 24px !important; }
+  .btn-submit { width: 100% !important; }
+}
+</style>

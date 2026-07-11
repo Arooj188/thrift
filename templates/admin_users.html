@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:1100px;">
+    <h1 style="font-size:28px; font-weight:800; margin-bottom:10px;">Users</h1>
+    <div style="background:white; border:1px solid #e5e7eb; border-radius:12px; overflow:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="text-align:left; color:#767676; font-size:12px;">
+                    <th style="padding:12px;">User</th>
+                    <th style="padding:12px;">Email</th>
+                    <th style="padding:12px;">Joined</th>
+                    <th style="padding:12px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr style="border-top:1px solid #f2efea;">
+                    <td style="padding:12px; font-size:13px;">{{ u.name }}</td>
+                    <td style="padding:12px; font-size:13px;">{{ u.email }}</td>
+                    <td style="padding:12px; font-size:13px;">{{ u.join_date or '' }}</td>
+                    <td style="padding:12px; font-size:13px;">
+                        <form action="/admin/user/{{ u.user_id }}/delete" method="POST" onsubmit="return confirm('Delete user and anonymize listings?');">
+                            <button type="submit" style="padding:8px 12px; border-radius:8px;">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

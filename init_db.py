@@ -13,7 +13,7 @@ def build_marketplace_tables():
     print("Step 2: Building the master Users table...")
     # Stores profiles for both buyers and sellers in Pakistan
     cursor.execute('''
-        CREATE TABLE users (
+         (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
@@ -70,3 +70,4 @@ def build_marketplace_tables():
 
 if __name__ == '__main__':
     build_marketplace_tables()
+CREATE TABLE users

@@ -1,7 +1,48 @@
-```html
+
 {% extends "base.html" %}
 
 {% block content %}
+
+<style>
+    .products {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 20px;
+        margin-top: 30px;
+    }
+    .product-card {
+        display: block;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        text-decoration: none;
+        color: #1c1c1c;
+    }
+    .product-card .size-tag {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #767676;
+        margin-bottom: 12px;
+    }
+    .product-card .brand {
+        font-size: 13px;
+        color: #767676;
+        margin-bottom: 4px;
+    }
+    .product-card h3 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .product-card .price {
+        font-size: 16px;
+        font-weight: 800;
+        color: #1c1c1c;
+    }
+</style>
 
 <div class="hero">
     <h1>thrift marketplace</h1>
@@ -30,10 +71,6 @@
     <a href="/product/{{ product.id }}" class="product-card">
 
         <div class="image-container">
-
-            {% if product.image_url %}
-            <img src="{{ url_for('static', filename=product.image_url) }}">
-            {% endif %}
 
             <span class="size-tag">
                 SIZE {{ product.size }}
@@ -101,4 +138,11 @@
 
 
 {% endblock %}
+<style>
+@media (max-width: 700px) {
+  .products { grid-template-columns: 1fr !important; }
+  .hero h1 { font-size: 34px !important; }
+  .hero p { font-size: 15px !important; }
+}
+</style>
 ```
