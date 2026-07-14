@@ -1,49 +1,6 @@
-
 {% extends "base.html" %}
 
 {% block content %}
-
-<style>
-    .products {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 20px;
-        margin-top: 30px;
-    }
-    .product-card {
-        display: block;
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 20px;
-        text-decoration: none;
-        color: #1c1c1c;
-    }
-    .product-card .size-tag {
-        display: inline-block;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        color: #767676;
-        margin-bottom: 12px;
-    }
-    .product-card .brand {
-        font-size: 13px;
-        color: #767676;
-        margin-bottom: 4px;
-    }
-    .product-card h3 {
-        margin: 0 0 8px 0;
-        font-size: 16px;
-        font-weight: 700;
-    }
-    .product-card .price {
-        font-size: 16px;
-        font-weight: 800;
-        color: #1c1c1c;
-    }
-</style>
-
 <div class="hero">
     <h1>thrift marketplace</h1>
     <p>
@@ -51,64 +8,32 @@
     </p>
 </div>
 
-
 <h2 class="section-title">Recently Listed Archives</h2>
 
-
 {% if not products %}
-
 <div class="empty-box">
     No active listings found. Click "List Item for Sale" to add clothes or shoes!
 </div>
-
-
 {% else %}
-
 <div class="products">
-
     {% for product in products %}
-
     <a href="/product/{{ product.id }}" class="product-card">
-
-        <div class="image-container">
-
-            <span class="size-tag">
-                SIZE {{ product.size }}
-            </span>
-
-        </div>
-
-
-        <div class="product-info">
-
-            <div class="brand">
-                {{ product.brand }}
-            </div>
-
-            <h3>
-                {{ product.title }}
-            </h3>
-
-            <div class="price">
-                Rs. {{ "{:,.2f}".format(product.asking_price) }}
-            </div>
-
-        </div>
-
+        {% if product.image_url or product.images %}
+        <img src="{{ build_image_url(product.image_url or product.images) }}" alt="{{ product.title }}" loading="lazy" style="width: 100%; height: 200px; object-fit: cover; border-radius: 10px; display: block; margin-bottom: 12px;">
+        {% else %}
+        <div style="width: 100%; height: 200px; background: #f2efea; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #767676; font-size: 13px; margin-bottom: 12px;">No image</div>
+        {% endif %}
+        <span class="size-tag">SIZE {{ product.size }}</span>
+        <div class="brand">{{ product.brand }}</div>
+        <h3>{{ product.title }}</h3>
+        <div class="price">Rs. {{ "{:,.2f}".format(product.asking_price) }}</div>
     </a>
-
     {% endfor %}
-
 </div>
-
 {% endif %}
 
-
-
 <section id="about" class="home-section">
-
     <h2>About Our Marketplace</h2>
-
     <p>
         Welcome to Pakistan's premium community-driven thrift platform.
         We make it simple for fashion enthusiasts across the country to
@@ -116,33 +41,51 @@
         supports conscious consumption while unlocking incredible value
         from pre-loved premium clothing and footwear collections.
     </p>
-
 </section>
 
-
-
 <section id="contact" class="home-section">
-
     <h2>Contact & Support</h2>
-
     <p>
         Have questions about listing an item or checking delivery statuses?
         Our team is active to assist you.
         <br><br>
-
         <strong>Email support:</strong> support@thrift.pk
-
     </p>
-
 </section>
 
+<!-- Standard script imports used by your classmates -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-analytics.js";
+  import {
+    getFirestore,
+    collection,
+    addDoc
+  } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
+  const firebaseConfig = {
+    apiKey: "AIzaSyDE8C4IXxSbPFc1Bok6XsFHdN0qAiRFeFM",
+    authDomain: "thrift-2ba27.firebaseapp.com",
+    projectId: "thrift-2ba27",
+    storageBucket: "thrift-2ba27.firebasestorage.app",
+    messagingSenderId: "605855960790",
+    appId: "1:605855960790:web:996dd32d7fe0fc07dd4377",
+    measurementId: "G-42SFNJV9V9"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db = getFirestore(app);
+
+  async function testConnection() {
+    try {
+      await 
+      console.log("✅ Firebase connected successfully!");
+    } catch (error) {
+      console.error("❌ Firebase connection failed:", error);
+    }
+  }
+
+  testConnection();
+</script>
 {% endblock %}
-<style>
-@media (max-width: 700px) {
-  .products { grid-template-columns: 1fr !important; }
-  .hero h1 { font-size: 34px !important; }
-  .hero p { font-size: 15px !important; }
-}
-</style>
-```

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Firebase Connection Test</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding-top: 50px; background: #f4f6f9; }
+    .box { background: white; padding: 30px; display: inline-block; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    h2 { color: #333; }
+    #status { font-weight: bold; font-size: 18px; margin-top: 20px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Firebase Connection Test Panel</h2>
+    <p>Checking database configuration keys...</p>
+    <div id="status">🔄 Waiting for database check...</div>
+  </div>
+
+  <!-- Modern Firebase SDK Imports via Secure Connections -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDE8C4IXxSbPFc1Bok6XsFHdN0qAiRFeFM",
+      authDomain: "thrift-2ba27.firebaseapp.com",
+      projectId: "thrift-2ba27",
+      storageBucket: "thrift-2ba27.firebasestorage.app",
+      messagingSenderId: "605855960790",
+      appId: "1:605855960790:web:996dd32d7fe0fc07dd4377",
+      measurementId: "G-42SFNJV9V9"
+    };
+
+    const statusDiv = document.getElementById('status');
+
+    async function runTest() {
+      try {
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const ref = doc(db, "connection_test", "ping");
+
+        // Attempt a live write
+        await setDoc(ref, { 
+          ok: true, 
+          timestamp: new Date().toISOString() 
+        });
+
+        // Attempt a live read back
+        const snap = await getDoc(ref);
+        
+        if(snap.exists()) {
+          statusDiv.innerHTML = "✅ SUCCESS! Connected to Firebase Firestore perfectly!";
+          statusDiv.style.color = "#155724";
+          alert("Bhai Connect Hogya! Check your Firebase Console now!");
+        }
+      } catch (e) {
+        statusDiv.innerHTML = "❌ Connection Failed: " + e.message;
+        statusDiv.style.color = "#721c24";
+        console.error("Firebase Error Details:", e);
+      }
+    }
+
+    runTest();
+  </script>
+</body>
+</html>

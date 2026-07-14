@@ -24,6 +24,11 @@ except Exception:
     cloudinary_uploader = None
     CLOUDINARY_AVAILABLE = False
 
+# ==========================================
+# SECURE FIREBASE CONNECTION SYSTEM
+# ==========================================
+
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super_secret_production_key_98765')
 app.config.update({
@@ -74,7 +79,7 @@ def build_image_url(image_value):
     if normalized.startswith('static/'):
         normalized = normalized[len('static/'):]
 
-    candidate_path = os.path.join(app.root_path, 'static', normalized)
+    candidate_path = os.path.normpath(os.path.join(app.root_path, 'static', normalized))
     if os.path.exists(candidate_path):
         return f"{app.static_url_path}/{normalized}"
 
@@ -95,7 +100,9 @@ def get_db_connection():
         url = DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
-        return psycopg2.connect(url)
+        conn = psycopg2.connect(url)
+        conn.row_factory = dict_factory
+        return conn
     else:
         conn = sqlite3.connect('database.db')
         conn.row_factory = dict_factory
@@ -248,8 +255,6 @@ def init_db():
     conn.close()
 
 def ensure_schema():
-    if DATABASE_URL:
-        return
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -272,7 +277,10 @@ def ensure_schema():
     ]
     for column_name, definition in user_columns:
         if not schema_has_column(conn, 'users', column_name):
-            cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {definition}")
+            try:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {definition}")
+            except Exception:
+                pass
 
     product_columns = [
         ("description", "TEXT"),
@@ -285,7 +293,10 @@ def ensure_schema():
     ]
     for column_name, definition in product_columns:
         if not schema_has_column(conn, 'Products', column_name):
-            cursor.execute(f"ALTER TABLE Products ADD COLUMN {column_name} {definition}")
+            try:
+                cursor.execute(f"ALTER TABLE Products ADD COLUMN {column_name} {definition}")
+            except Exception:
+                pass
 
     order_columns = [
         ("buyer_name", "TEXT"),
@@ -307,7 +318,10 @@ def ensure_schema():
     if schema_has_column(conn, 'orders', 'order_id'):
         for column_name, definition in order_columns:
             if not schema_has_column(conn, 'orders', column_name):
-                cursor.execute(f"ALTER TABLE orders ADD COLUMN {column_name} {definition}")
+                try:
+                    cursor.execute(f"ALTER TABLE orders ADD COLUMN {column_name} {definition}")
+                except Exception:
+                    pass
 
     if not DATABASE_URL:
         try:
@@ -416,7 +430,7 @@ def get_product_by_id(product_id):
     return product
 
 
-
+def is_admin_user():
     if 'user_id' not in session:
         return False
     conn = get_db_connection()
@@ -447,29 +461,81 @@ try:
 except Exception as e:
     print(f"Database initialization status: {e}")
 
-def send_live_email(to_email, buyer_name, item_title, price, tracking_number, destination):
-    if not RESEND_API_KEY:
+def _send_email_via_resend(to_email, subject, html_content):
+    try:
+        import resend
+        resend.api_key = RESEND_API_KEY
+        params = {
+            "from": "Thrift Marketplace <noreply@thrift.pk>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content,
+        }
+        result = resend.Emails.send(params)
+        return result
+    except Exception as e:
+        print(f"Email send error: {e}")
+        return None
+
+def send_buyer_email(to_email, buyer_name, item_title, price, tracking_number, destination, payment_method):
+    subject = f"Order Confirmed: {item_title}"
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1c1c1c;">
+        <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 16px;">Order Confirmed</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: #555;">Dear {buyer_name},</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #555;">Your order on thrift has been placed successfully!</p>
+        <div style="background: #f2efea; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Item:</strong> {item_title}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Total Paid:</strong> Rs. {price:.2f}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Payment Method:</strong> {payment_method}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Tracking Number:</strong> {tracking_number}</p>
+            <p style="margin: 0; font-size: 14px;"><strong>Shipping To:</strong> {destination}</p>
+        </div>
+        <p style="font-size: 13px; color: #767676;">Thank you for shopping with us.</p>
+    </div>
+    """
+    if RESEND_API_KEY:
+        return _send_email_via_resend(to_email, subject, html)
+    else:
         print("\n" + "="*60)
-        print(f"[CONSOLE EMAIL OUTBOX] SENT TO: {to_email}")
-        print("="*60)
-        print(f"Dear {buyer_name},")
-        print(f"Your order on thrift has been placed successfully!")
-        print(f"Item: {item_title} - Total Paid: Rs. {price:.2f}")
-        print(f"Tracking Number: {tracking_number}")
-        print(f"Shipping To: {destination}")
+        print(f"[CONSOLE EMAIL OUTBOX] BUYER NOTIFICATION")
+        print(f"TO: {to_email}")
+        print(f"SUBJECT: {subject}")
+        print(f"ITEM: {item_title} | PRICE: Rs. {price:.2f}")
+        print(f"TRACKING: {tracking_number} | DEST: {destination}")
         print("="*60 + "\n")
-        return False
+        return None
 
+def send_seller_email(to_email, seller_name, item_title, buyer_name, buyer_phone, buyer_address, tracking_number):
+    subject = f"New Order Received: {item_title}"
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1c1c1c;">
+        <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 16px;">New Order Received</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: #555;">Dear {seller_name},</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #555;">Your item has been purchased on thrift!</p>
+        <div style="background: #f2efea; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Item:</strong> {item_title}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Buyer:</strong> {buyer_name}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Buyer Phone:</strong> {buyer_phone}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Shipping Address:</strong> {buyer_address}</p>
+            <p style="margin: 0; font-size: 14px;"><strong>Tracking Number:</strong> {tracking_number}</p>
+        </div>
+        <p style="font-size: 13px; color: #767676;">Please prepare the item for shipment.</p>
+    </div>
+    """
+    if RESEND_API_KEY:
+        return _send_email_via_resend(to_email, subject, html)
+    else:
+        print("\n" + "="*60)
+        print(f"[CONSOLE EMAIL OUTBOX] SELLER NOTIFICATION")
+        print(f"TO: {to_email}")
+        print(f"SUBJECT: {subject}")
+        print(f"ITEM: {item_title} | BUYER: {buyer_name}")
+        print(f"BUYER PHONE: {buyer_phone} | ADDRESS: {buyer_address}")
+        print(f"TRACKING: {tracking_number}")
+        print("="*60 + "\n")
+        return None
 
-    @app.after_request
-    def set_security_headers(response):
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['Referrer-Policy'] = 'no-referrer-when-downgrade'
-        response.headers['Permissions-Policy'] = 'geolocation=()'
-        # Content Security Policy: allow same-origin, images from data: and https, inline styles/scripts for legacy templates
-        response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
-        return response
 @app.before_request
 def ensure_cart_exists():
     if 'cart' not in session:
@@ -487,7 +553,7 @@ def index():
         else:
             cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
     else:
-        cursor.execdef is_admin_user():ute("SELECT * FROM Products WHERE status = 'available'")
+        cursor.execute("SELECT * FROM Products WHERE status = 'available'")
     
     if DATABASE_URL:
         columns = [desc[0] for desc in cursor.description]
@@ -496,6 +562,10 @@ def index():
         products = cursor.fetchall()
     conn.close()
     return render_template('index.html', products=products, selected_category=category)
+
+@app.route('/how-it-works')
+def how_it_works():
+    return render_template('how_it_works.html')
 
 @app.route('/product/<int:product_id>')
 def product_details(product_id):
@@ -677,7 +747,31 @@ def place_order():
         full_delivery_note = f"{shipping_company} | {payment_method}"
         if delivery_note:
             full_delivery_note = f"{full_delivery_note} | {delivery_note}"
-        send_live_email(buyer_email, buyer_name, product['title'], product['asking_price'], tracking_num, f"{street}, {city} | {full_delivery_note}")
+        
+        send_buyer_email(buyer_email, buyer_name, product['title'], product['asking_price'], tracking_num, f"{street}, {city} | {full_delivery_note}", payment_method)
+        
+        seller_info = None
+        conn_temp2 = get_db_connection()
+        cur_temp2 = conn_temp2.cursor()
+        if DATABASE_URL:
+            cur_temp2.execute('SELECT name, email FROM users WHERE user_id = %s', (seller_id,))
+            row = cur_temp2.fetchone()
+            seller_info = dict(zip([d[0] for d in cur_temp2.description], row)) if row else None
+        else:
+            row = cur_temp2.execute('SELECT name, email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
+            seller_info = dict(row) if row else None
+        conn_temp2.close()
+        
+        if seller_info:
+            send_seller_email(
+                seller_info['email'],
+                seller_info['name'],
+                product['title'],
+                buyer_name,
+                buyer_phone,
+                f"{street}, {city} | {full_delivery_note}",
+                tracking_num
+            )
 
     conn.commit()
     conn.close()
@@ -837,43 +931,49 @@ def mark_sold(product_id):
 
 @app.route('/orders', methods=['GET', 'POST'])
 def track_orders():
-    orders = []
-    email_searched = ""
-    if request.method == 'POST':
-        email_searched = request.form.get('email', '').strip().lower()
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        if DATABASE_URL:
-            cursor.execute('''
-                SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                    o.buyer_name, o.buyer_email, o.buyer_phone
-                FROM orders o
-                JOIN Products p ON o.product_id = p.id
-                WHERE lower(o.buyer_email) = %s
-                ORDER BY o.order_date DESC
-            ''', (email_searched,))
-            columns = [desc[0] for desc in cursor.description]
-            orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        else:
-            cursor.execute('''
-                SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                    o.buyer_name, o.buyer_email, o.buyer_phone
-                FROM orders o
-                JOIN Products p ON o.product_id = p.id
-                WHERE lower(o.buyer_email) = ?
-                ORDER BY o.order_date DESC
-            ''', (email_searched,))
-            orders = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-    return render_template('orders.html', orders=orders, email=email_searched)
+    if 'user_id' not in session:
+        flash('Please log in to view your orders.')
+        return redirect(url_for('login'))
 
-@app.route('/admin-portal')
-def admin_portal():
+    orders = []
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if DATABASE_URL:
+        cursor.execute('''
+            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+                p.image_url, p.images,
+                o.buyer_name, o.buyer_email, o.buyer_phone
+            FROM orders o
+            JOIN Products p ON o.product_id = p.id
+            WHERE o.buyer_id = %s
+            ORDER BY o.order_date DESC
+        ''', (session['user_id'],))
+        columns = [desc[0] for desc in cursor.description]
+        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    else:
+        cursor.execute('''
+            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+                p.image_url, p.images,
+                o.buyer_name, o.buyer_email, o.buyer_phone
+            FROM orders o
+            JOIN Products p ON o.product_id = p.id
+            WHERE o.buyer_id = ?
+            ORDER BY o.order_date DESC
+        ''', (session['user_id'],))
+        orders = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return render_template('orders.html', orders=orders)
+
+@app.route('/admin')
+def admin_dashboard():
     if not is_admin_user():
         flash('Admin access required.')
         return redirect(url_for('index'))
+    
+    section = request.args.get('section', 'dashboard')
     conn = get_db_connection()
     cursor = conn.cursor()
+    
     if DATABASE_URL:
         cursor.execute('''
             SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
@@ -886,58 +986,78 @@ def admin_portal():
             ORDER BY o.order_date DESC
         ''')
         columns = [desc[0] for desc in cursor.description]
-        sold_items = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
-                s.name AS seller_name, s.phone AS seller_phone, s.email AS seller_email,
-                b.name AS buyer_name, b.email AS buyer_email, b.phone AS buyer_phone
-            FROM orders o
-            LEFT JOIN Products p ON o.product_id = p.id
-            LEFT JOIN users s ON o.seller_id = s.user_id
-            LEFT JOIN users b ON o.buyer_id = b.user_id
-            ORDER BY o.order_date DESC
-        ''')
-        sold_items = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    total_revenue = round(sum(item.get('product_price', 0) or 0 for item in sold_items), 2)
-    total_commission = round(sum(item.get('platform_commission', 0) or 0 for item in sold_items), 2)
-    pending_payouts = sum(1 for item in sold_items if item.get('payout_status') == 'Pending')
-    return render_template('admin.html', sold_items=sold_items, total_revenue=total_revenue, total_commission=total_commission, pending_payouts=pending_payouts)
-
-
-@app.route('/admin/users')
-def admin_users():
-    if not is_admin_user():
-        flash('Admin access required.')
-        return redirect(url_for('index'))
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if DATABASE_URL:
+        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
         cursor.execute('SELECT * FROM users ORDER BY join_date DESC')
         columns = [desc[0] for desc in cursor.description]
         users = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
-    conn.close()
-    return render_template('admin_users.html', users=users)
-
-
-@app.route('/admin/listings')
-def admin_listings():
-    if not is_admin_user():
-        flash('Admin access required.')
-        return redirect(url_for('index'))
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if DATABASE_URL:
+        
         cursor.execute('SELECT * FROM Products ORDER BY created_at DESC')
         columns = [desc[0] for desc in cursor.description]
         listings = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        cursor.execute('''
+            SELECT category, COUNT(*) as count FROM Products 
+            WHERE status = 'sold' AND category IS NOT NULL 
+            GROUP BY category ORDER BY count DESC
+        ''')
+        columns = [desc[0] for desc in cursor.description]
+        category_stats = [dict(zip(columns, row)) for row in cursor.fetchall()]
     else:
+        orders = [dict(row) for row in cursor.execute('''
+            SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
+                s.name AS seller_name, s.phone AS seller_phone, s.email AS seller_email,
+                b.name AS buyer_name, b.email AS buyer_email, b.phone AS buyer_phone
+            FROM orders o
+            LEFT JOIN Products p ON o.product_id = p.id
+            LEFT JOIN users s ON o.seller_id = s.user_id
+            LEFT JOIN users b ON o.buyer_id = b.user_id
+            ORDER BY o.order_date DESC
+        ''').fetchall()]
+        
+        users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
+        
         listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
+        
+        category_stats = [dict(row) for row in cursor.execute('''
+            SELECT category, COUNT(*) as count FROM Products 
+            WHERE status = 'sold' AND category IS NOT NULL 
+            GROUP BY category ORDER BY count DESC
+        ''').fetchall()]
+    
     conn.close()
-    return render_template('admin_listings.html', listings=listings)
+    
+    total_revenue = round(sum(item.get('product_price', 0) or 0 for item in orders), 2)
+    total_commission = round(sum(item.get('platform_commission', 0) or 0 for item in orders), 2)
+    pending_payouts = sum(1 for item in orders if item.get('payout_status') == 'Pending')
+    
+    return render_template('admin_dashboard.html',
+        section=section,
+        orders=orders,
+        users=users,
+        listings=listings,
+        total_revenue=total_revenue,
+        total_commission=total_commission,
+        pending_payouts=pending_payouts,
+        category_stats=category_stats,
+        current_admin_id=session.get('user_id')
+    )
+
+@app.route('/admin-portal')
+def admin_portal():
+    return redirect(url_for('admin_dashboard', section='dashboard'))
+
+@app.route('/admin/users')
+def admin_users():
+    return redirect(url_for('admin_dashboard', section='users'))
+
+@app.route('/admin/listings')
+def admin_listings():
+    return redirect(url_for('admin_dashboard', section='listings'))
+
+@app.route('/admin/orders')
+def admin_orders():
+    return redirect(url_for('admin_dashboard', section='orders'))
 
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
@@ -945,21 +1065,59 @@ def admin_delete_user(user_id):
     if not is_admin_user():
         flash('Admin access required.')
         return redirect(url_for('index'))
+
+    current_admin_id = session.get('user_id')
+    if user_id == current_admin_id:
+        flash('You cannot delete your own account.')
+        return redirect(url_for('admin_dashboard', section='users'))
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    # set seller_id to NULL for products, then delete user
+
     try:
+        # Load the target user
         if DATABASE_URL:
-            cursor.execute('UPDATE Products SET seller_id = NULL WHERE seller_id = %s', (user_id,))
-            cursor.execute('DELETE FROM users WHERE user_id = %s', (user_id,))
+            cursor.execute('SELECT is_admin, email FROM users WHERE user_id = %s', (user_id,))
         else:
-            cursor.execute('UPDATE Products SET seller_id = NULL WHERE seller_id = ?', (user_id,))
-            cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
+            cursor.execute('SELECT is_admin, email FROM users WHERE user_id = ?', (user_id,))
+        target = cursor.fetchone()
+        if not target:
+            flash('User not found.')
+            return redirect(url_for('admin_dashboard', section='users'))
+
+        # Determine whether the target is an administrator (explicit flag or ADMIN_EMAIL fallback)
+        is_target_admin = bool(target.get('is_admin'))
+        if not is_target_admin and os.environ.get('ADMIN_EMAIL') and target.get('email') and target['email'].lower() == os.environ.get('ADMIN_EMAIL').lower():
+            is_target_admin = True
+
+        # Count administrators remaining AFTER this deletion (exclude the target itself).
+        # Rows use dict_factory, so read the count by its aliased column name (not integer index).
+        if DATABASE_URL:
+            cursor.execute(
+                'SELECT COUNT(*) AS cnt FROM users WHERE (is_admin = 1 OR lower(email) = lower(%s)) AND user_id <> %s',
+                (os.environ.get('ADMIN_EMAIL', ''), user_id),
+            )
+        else:
+            cursor.execute(
+                'SELECT COUNT(*) AS cnt FROM users WHERE (is_admin = 1 OR lower(email) = lower(?)) AND user_id <> ?',
+                (os.environ.get('ADMIN_EMAIL', ''), user_id),
+            )
+        remaining_admins = cursor.fetchone()['cnt']
+
+        if is_target_admin and remaining_admins == 0:
+            flash('Cannot delete the final remaining administrator.')
+            return redirect(url_for('admin_dashboard', section='users'))
+
+        cursor.execute('UPDATE Products SET seller_id = NULL WHERE seller_id = ?', (user_id,))
+        cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
         conn.commit()
+        flash('User removed.')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error removing user: {str(e)}')
     finally:
         conn.close()
-    flash('User removed.')
-    return redirect(url_for('admin_users'))
+    return redirect(url_for('admin_dashboard', section='users'))
 
 
 @app.route('/admin/listing/<int:product_id>/delete', methods=['POST'])
@@ -967,12 +1125,10 @@ def admin_delete_listing(product_id):
     if not is_admin_user():
         flash('Admin access required.')
         return redirect(url_for('index'))
-    # reuse delete logic but allow admin
     product = get_product_by_id(product_id)
     if not product:
         flash('Listing not found.')
-        return redirect(url_for('admin_listings'))
-    # remove local files
+        return redirect(url_for('admin_dashboard', section='listings'))
     try:
         images = []
         if product.get('images'):
@@ -1004,7 +1160,7 @@ def admin_delete_listing(product_id):
     conn.commit()
     conn.close()
     flash('Listing removed.')
-    return redirect(url_for('admin_listings'))
+    return redirect(url_for('admin_dashboard', section='listings'))
 
 
 @app.route('/admin/order/<int:order_id>/update', methods=['POST'])
@@ -1015,7 +1171,7 @@ def admin_update_order(order_id):
     new_status = sanitize_input(request.form.get('status', ''))
     if not new_status:
         flash('No status provided.')
-        return redirect(url_for('admin_portal'))
+        return redirect(url_for('admin_dashboard', section='orders'))
     conn = get_db_connection()
     cursor = conn.cursor()
     if DATABASE_URL:
@@ -1025,7 +1181,7 @@ def admin_update_order(order_id):
     conn.commit()
     conn.close()
     flash('Order status updated.')
-    return redirect(url_for('admin_portal'))
+    return redirect(url_for('admin_dashboard', section='orders'))
 
 
 @app.route('/product/<int:product_id>/question', methods=['POST'])
@@ -1087,17 +1243,29 @@ def signup():
         postal_code = sanitize_input(request.form.get('postal_code', ''))
         bio = sanitize_input(request.form.get('bio', ''))
 
+        def render_form():
+            # Re-render with entered values so the user does not have to retype
+            # Name/Email/Username after a validation error. Password is never echoed back.
+            return render_template('signup.html', name=name, email=email, username=username)
+
         if not (name and email and password and phone and address and city):
             flash('Please complete all required fields.')
-            return redirect(url_for('signup'))
+            return render_form()
 
         if not validate_email(email):
             flash('Please provide a valid email address.')
-            return redirect(url_for('signup'))
+            return render_form()
 
         if not validate_username(username):
             flash('Please choose a valid username (3-32 chars, letters, numbers, _.-).')
-            return redirect(url_for('signup'))
+            return render_form()
+
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long.')
+            return render_form()
+        if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+            flash('Password must contain both letters and numbers.')
+            return render_form()
 
         password_hash = generate_password_hash(password)
         join_date = datetime.utcnow()
@@ -1106,16 +1274,25 @@ def signup():
         cursor = conn.cursor()
 
         try:
-            # check duplicates case-insensitively
+            # Check for an existing account with the same email (case-insensitive).
             if DATABASE_URL:
-                cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(%s) OR (username IS NOT NULL AND lower(username) = lower(%s))', (email, username))
+                cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(%s)', (email,))
             else:
-                cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?) OR (username IS NOT NULL AND lower(username) = lower(?))', (email, username))
-            existing_user = cursor.fetchone()
-            if existing_user:
-                flash('An account with that email or username already exists.')
-                conn.close()
-                return redirect(url_for('signup'))
+                cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?)', (email,))
+            if cursor.fetchone():
+                flash('An account with this email already exists.')
+                return render_form()
+
+            # Only check the username when a non-empty username was provided.
+            # A blank username must NOT collide with other blank usernames.
+            if username:
+                if DATABASE_URL:
+                    cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(%s)', (username,))
+                else:
+                    cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(?)', (username,))
+                if cursor.fetchone():
+                    flash('This username is already taken.')
+                    return render_form()
 
             if DATABASE_URL:
                 cursor.execute('''
@@ -1133,10 +1310,10 @@ def signup():
         except Exception as e:
             msg = str(e).lower()
             if 'unique' in msg or 'constraint' in msg:
-                flash('An account with that email or username already exists.')
+                flash('An account with this email or username already exists.')
             else:
                 flash('We could not create your account right now. Please try again.')
-            return redirect(url_for('signup'))
+            return render_form()
         finally:
             conn.close()
 
@@ -1189,43 +1366,6 @@ def logout():
     # Clear out the browser session memory to log the user out safely
     session.clear()
     return redirect(url_for('index'))
-
-@app.route('/admin/orders')
-def admin_orders():
-    if not is_admin_user():
-        flash('Admin access required.')
-        return redirect(url_for('index'))
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
-                s.name AS seller_name, s.phone AS seller_phone, s.address AS seller_address, s.city AS seller_city,
-                b.name AS buyer_name, b.phone AS buyer_phone, b.address AS buyer_address, b.city AS buyer_city
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            JOIN users s ON o.seller_id = s.user_id
-            JOIN users b ON o.buyer_id = b.user_id
-            ORDER BY o.order_id DESC
-        ''')
-        columns = [desc[0] for desc in cursor.description]
-        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
-                s.name AS seller_name, s.phone AS seller_phone, s.address AS seller_address, s.city AS seller_city,
-                b.name AS buyer_name, b.phone AS buyer_phone, b.address AS buyer_address, b.city AS buyer_city
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            JOIN users s ON o.seller_id = s.user_id
-            JOIN users b ON o.buyer_id = b.user_id
-            ORDER BY o.order_id DESC
-        ''')
-        orders = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    total_commission = round(sum(order.get('platform_commission') or 0 for order in orders), 2)
-    pending_payouts = sum(1 for order in orders if order.get('payout_status') == 'Pending')
-    return render_template('admin.html', sold_items=orders, total_revenue=round(sum(order.get('product_price', 0) or 0 for order in orders), 2), total_commission=total_commission, pending_payouts=pending_payouts)
 
 
 if __name__ == '__main__':

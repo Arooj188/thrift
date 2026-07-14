@@ -6,19 +6,43 @@
     <form action="/signup" method="POST">
         <div style="margin-bottom: 15px;">
             <label>Full Name</label>
-            <input type="text" name="name" required style="width: 100%; padding: 8px; margin-top: 5px;">
+            <input type="text" name="name" required value="{{ name|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px;">
         </div>
         <div style="margin-bottom: 15px;">
             <label>Username</label>
-            <input type="text" name="username" placeholder="Optional" style="width: 100%; padding: 8px; margin-top: 5px;">
+            <input type="text" name="username" placeholder="Optional" value="{{ username|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px;">
         </div>
         <div style="margin-bottom: 15px;">
             <label>Email Address</label>
-            <input type="email" name="email" required style="width: 100%; padding: 8px; margin-top: 5px;">
+            <input type="email" name="email" required value="{{ email|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px;">
         </div>
         <div style="margin-bottom: 15px;">
             <label>Password</label>
-            <input type="password" name="password" required style="width: 100%; padding: 8px; margin-top: 5px;">
+            <div style="display: flex; align-items: center;">
+                <input type="password" name="password" id="signupPassword" required style="flex: 1; padding: 8px; margin-top: 5px;">
+                <button type="button" id="signupTogglePassword" style="background: none; border: none; cursor: pointer; padding: 6px; font-size: 18px; color: #767676; margin-left: 6px;" aria-label="Toggle password visibility">
+                    <span id="signupEye">👁️</span>
+                </button>
+                <div class="bear-wrapper" id="signupBear">
+                    <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="50" cy="52" r="38" fill="#8B5E3C"/>
+                        <circle cx="26" cy="28" r="12" fill="#8B5E3C"/>
+                        <circle cx="74" cy="28" r="12" fill="#8B5E3C"/>
+                        <circle cx="26" cy="28" r="6" fill="#D2A679"/>
+                        <circle cx="74" cy="28" r="6" fill="#D2A679"/>
+                        <circle cx="38" cy="48" r="5" fill="white" class="bear-eye"/>
+                        <circle cx="62" cy="48" r="5" fill="white" class="bear-eye"/>
+                        <circle cx="38" cy="48" r="2" fill="#1c1c1c" class="bear-pupil"/>
+                        <circle cx="62" cy="48" r="2" fill="#1c1c1c" class="bear-pupil"/>
+                        <ellipse cx="20" cy="62" rx="9" ry="6" fill="#8B5E3C" class="bear-hand left-hand"/>
+                        <ellipse cx="80" cy="62" rx="9" ry="6" fill="#8B5E3C" class="bear-hand right-hand"/>
+                        <ellipse cx="50" cy="72" rx="18" ry="12" fill="#D2A679"/>
+                        <circle cx="44" cy="70" r="2" fill="#1c1c1c"/>
+                        <circle cx="56" cy="70" r="2" fill="#1c1c1c"/>
+                        <path d="M46 78 Q50 82 54 78" stroke="#1c1c1c" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </div>
+            </div>
         </div>
         <div style="margin-bottom: 15px;">
             <label>WhatsApp / Phone Number</label>
@@ -49,4 +73,56 @@
         <button type="submit" style="background: black; color: white; border: none; padding: 12px; width: 100%; cursor: pointer;">Register</button>
     </form>
 </div>
+<style>
+.bear-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+}
+.bear-hand {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+.bear-pupil {
+  transition: opacity 0.15s ease;
+}
+.password-hidden .left-hand {
+  transform: translate(14px, -10px) rotate(-10deg);
+}
+.password-hidden .right-hand {
+  transform: translate(-14px, -10px) rotate(10deg);
+}
+.password-hidden .bear-pupil {
+  opacity: 0;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pwdInput = document.getElementById('signupPassword');
+    const toggleBtn = document.getElementById('signupTogglePassword');
+    const eye = document.getElementById('signupEye');
+    const bearWrapper = document.getElementById('signupBear');
+    if (!pwdInput || !toggleBtn || !bearWrapper) return;
+
+    function updateBearState() {
+        if (pwdInput.type === 'password') {
+            bearWrapper.classList.add('password-hidden');
+            eye.textContent = '👁️';
+        } else {
+            bearWrapper.classList.remove('password-hidden');
+            eye.textContent = '🔒';
+        }
+    }
+
+    updateBearState();
+    toggleBtn.addEventListener('click', function() {
+        if (pwdInput.type === 'password') {
+            pwdInput.type = 'text';
+        } else {
+            pwdInput.type = 'password';
+        }
+        updateBearState();
+    });
+});
+</script>
 {% endblock %}

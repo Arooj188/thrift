@@ -1,7 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
-
-<!-- Custom local styles to enforce the wide, side-by-side professional layout -->
 <style>
     .sell-form-box { 
         max-width: 650px; 
@@ -10,10 +8,9 @@
         border: 1px solid #e5e7eb; 
         padding: 40px; 
         border-radius: 16px; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
     }
     .sell-form-group { 
-        margin-bottom: 25px; 
+        margin-bottom: 20px; 
     }
     .sell-form-group label { 
         display: block; 
@@ -21,33 +18,53 @@
         font-weight: 700; 
         text-transform: uppercase; 
         color: #767676; 
-        margin-bottom: 10px; 
+        margin-bottom: 8px; 
         letter-spacing: 0.5px; 
     }
     .sell-form-group input, .sell-form-group select { 
         width: 100%; 
-        padding: 14px; 
+        padding: 12px; 
         border: 1px solid #dcd7ce; 
         background-color: #fbf9f6; 
-        border-radius: 6px; 
+        border-radius: 8px; 
         box-sizing: border-box; 
         font-size: 15px; 
         color: #1c1c1c; 
         outline: none; 
+        transition: border-color 0.2s ease;
     }
-    /* This makes your fields sit horizontally next to each other */
+    .sell-form-group input:focus, .sell-form-group select:focus {
+        border-color: #1c1c1c;
+    }
     .sell-form-row { 
         display: flex; 
-        gap: 20px; 
+        gap: 16px; 
     }
     .sell-form-row .sell-form-group { 
         flex: 1; 
     }
+    .btn-submit {
+        background-color: #1c1c1c;
+        color: #fbf9f6;
+        border: none;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 14px 24px;
+        transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .btn-submit:hover {
+        background-color: #333333;
+        transform: translateY(-1px);
+    }
 </style>
 
 <div class="sell-form-box">
-    <h1 style="font-family: Georgia, serif; font-size: 42px; font-weight: 400; margin: 0 0 10px 0; color: #1c1c1c;">Start Selling</h1>
-    <p style="font-size: 14px; color: #767676; margin-bottom: 40px; line-height: 1.6;">
+    <h1 style="font-family: Georgia, serif; font-size: 36px; font-weight: 400; margin: 0 0 8px 0; color: #1c1c1c;">Start Selling</h1>
+    <p style="font-size: 14px; color: #767676; margin-bottom: 32px; line-height: 1.6;">
         Fill out the details below to display your pre-loved clothing or shoes on our marketplace.
     </p>
     
@@ -57,7 +74,6 @@
             <input type="text" name="title" required placeholder="e.g. Vintage Leather Jacket">
         </div>
         
-        <!-- Row 1: Brand & Category -->
         <div class="sell-form-row">
             <div class="sell-form-group">
                 <label>Brand / Designer</label>
@@ -65,7 +81,6 @@
             </div>
             <div class="sell-form-group">
                 <label>Category</label>
-                <!-- Added id="categorySelect" hook for our script -->
                 <select name="category" id="categorySelect">
                     <option value="Clothing">Clothing</option>
                     <option value="Shoes">Shoes</option>
@@ -73,7 +88,6 @@
             </div>
         </div>
         
-        <!-- Row 2: Size & Color -->
         <div class="sell-form-row">
             <div class="sell-form-group">
                 <label>Size</label>
@@ -85,7 +99,6 @@
             </div>
         </div>
         
-        <!-- Row 3: Times Worn & Condition Issues -->
         <div class="sell-form-row">
             <div class="sell-form-group">
                 <label>How Many Times Worn?</label>
@@ -93,7 +106,6 @@
             </div>
             <div class="sell-form-group">
                 <label>Any Tears, Stains or Holes?</label>
-                <!-- Added id="conditionDropdown" hook for our script -->
                 <select name="has_tears" id="conditionDropdown">
                     <option value="None - Perfect Condition">None - Perfect Condition</option>
                     <option value="Minor loose threads only">Minor loose threads only</option>
@@ -117,14 +129,15 @@
             <input type="number" name="asking_price" required placeholder="e.g. 1500">
         </div>
         
-        <div class="sell-form-group" style="margin-top: 30px;">
+        <div class="sell-form-group" style="margin-top: 24px;">
             <label>Upload High-Res Outfit Photo</label>
-                <input type="file" name="images" required multiple style="border: none; padding: 5px 0; background: none;">
-        <button type="submit" class="btn-submit" style="margin-top: 20px;">Submit Listing</button>
+            <input type="file" name="images" required multiple style="border: none; padding: 5px 0; background: none;">
+        </div>
+        
+        <button type="submit" class="btn-submit" style="margin-top: 8px; width: 100%;">Submit Listing</button>
     </form>
 </div>
 
-<!-- Lightweight script that alters condition choices based on active category context -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const categorySelect = document.getElementById('categorySelect');
@@ -132,14 +145,12 @@
 
         categorySelect.addEventListener('change', function() {
             if (this.value === 'Shoes') {
-                // Inject specific footwear options into the input stream
                 conditionDropdown.innerHTML = `
                     <option value="Brand New Condition with Box">Brand New Condition with Box</option>
                     <option value="Slightly worn soles / Creased toe-box">Slightly worn soles / Creased toe-box</option>
                     <option value="Heavy scuffs / Physical separation / Torn lining">Heavy scuffs / Physical separation / Torn lining</option>
                 `;
             } else {
-                // Restore standard textile criteria options
                 conditionDropdown.innerHTML = `
                     <option value="None - Perfect Condition">None - Perfect Condition</option>
                     <option value="Minor loose threads only">Minor loose threads only</option>

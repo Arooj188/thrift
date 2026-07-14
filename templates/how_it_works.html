@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .hiw-hero {
+        padding: 70px 0 40px 0;
+        max-width: 760px;
+    }
+    .hiw-hero h1 {
+        font-size: 48px;
+        font-weight: 800;
+        letter-spacing: -1.5px;
+        margin: 0 0 16px 0;
+        line-height: 1.1;
+    }
+    .hiw-hero p {
+        color: #555555;
+        font-size: 17px;
+        line-height: 1.7;
+        max-width: 620px;
+        margin: 0;
+    }
+
+    .hiw-section-title {
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: #767676;
+        margin: 50px 0 24px 0;
+    }
+
+    .hiw-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 20px;
+    }
+    .hiw-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 28px;
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.25s ease;
+    }
+    .hiw-card.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .hiw-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+    }
+    .hiw-card .hiw-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: #f2efea;
+        color: #1c1c1c;
+        font-size: 16px;
+        font-weight: 800;
+        margin-bottom: 16px;
+    }
+    .hiw-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 18px;
+        font-weight: 700;
+        color: #1c1c1c;
+    }
+    .hiw-card p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.65;
+        color: #555555;
+    }
+
+    .hiw-cta {
+        margin: 70px 0 20px 0;
+        background: #f2efea;
+        border-radius: 20px;
+        padding: 50px 40px;
+        text-align: center;
+    }
+    .hiw-cta h2 {
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin: 0 0 14px 0;
+        color: #1c1c1c;
+    }
+    .hiw-cta p {
+        color: #555555;
+        font-size: 15px;
+        line-height: 1.7;
+        max-width: 540px;
+        margin: 0 auto 26px auto;
+    }
+    .hiw-cta a.btn-sell {
+        display: inline-block;
+        text-decoration: none;
+        padding: 14px 28px;
+        font-size: 13px;
+    }
+    .hiw-cta a.btn-sell.hiw-btn-hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .hiw-card {
+            opacity: 1;
+            transform: none;
+            transition: none;
+        }
+        .hiw-card.is-visible {
+            opacity: 1;
+            transform: none;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .hiw-hero { padding: 40px 0 20px 0; }
+        .hiw-hero h1 { font-size: 34px; }
+        .hiw-cards { grid-template-columns: 1fr; }
+        .hiw-cta { padding: 36px 22px; }
+    }
+</style>
+
+<div class="hiw-hero">
+    <h1>How It Works</h1>
+    <p>Learn how buying, selling, delivery, and secure transactions work on our marketplace.</p>
+</div>
+
+<h2 class="hiw-section-title">What you can do</h2>
+
+<div class="hiw-cards">
+    <div class="hiw-card">
+        <div class="hiw-badge">1</div>
+        <h3>Buying</h3>
+        <p>Browse unique pre-loved fashion, complete your purchase, and receive tracking updates after the seller ships your order.</p>
+    </div>
+    <div class="hiw-card">
+        <div class="hiw-badge">2</div>
+        <h3>Selling</h3>
+        <p>Create an account, upload quality photos with accurate item details, set your price, and publish your listing. You'll be notified once your item is sold.</p>
+    </div>
+    <div class="hiw-card">
+        <div class="hiw-badge">3</div>
+        <h3>Delivery</h3>
+        <p>Orders are shipped through trusted courier services, allowing buyers to monitor delivery progress from their account.</p>
+    </div>
+    <div class="hiw-card">
+        <div class="hiw-badge">4</div>
+        <h3>Marketplace</h3>
+        <p>Our platform connects buyers and sellers while securely managing orders and supporting smooth marketplace transactions.</p>
+    </div>
+    <div class="hiw-card">
+        <div class="hiw-badge">5</div>
+        <h3>Secure Shopping</h3>
+        <p>Only authenticated users can access their own orders and tracking information, helping keep every transaction private and secure.</p>
+    </div>
+</div>
+
+<div class="hiw-cta">
+    <h2>Ready to Start?</h2>
+    <p>Join our marketplace today and start buying or selling pre-loved fashion across Pakistan.</p>
+    {% if session.user_id %}
+        <a href="{{ url_for('sell') }}" class="btn-sell">Start Selling</a>
+    {% else %}
+        <a href="{{ url_for('signup') }}" class="btn-sell">Start Selling</a>
+    {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='js/how_it_works.js') }}"></script>
+{% endblock %}

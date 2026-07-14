@@ -7,22 +7,73 @@
         border: none;
         border-radius: 999px;
         cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     .btn-submit:hover {
         background-color: #333333;
+        transform: translateY(-1px);
+    }
+    .cart-item {
+        display: flex;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+    .cart-item-image {
+        width: 80px;
+        height: 80px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: #f2efea;
+        flex-shrink: 0;
+    }
+    .cart-total {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .remove-link {
+        color: #dc2626;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        text-decoration: none;
+    }
+    .remove-link:hover {
+        color: #b91c1c;
+        text-decoration: underline;
     }
 </style>
-<h1 style="font-family: Georgia, serif; font-size: 42px; font-weight: 400; margin-bottom: 40px;">Shopping Bag</h1>
+<h1 style="font-family: Georgia, serif; font-size: 36px; font-weight: 400; margin-bottom: 30px;">Shopping Bag</h1>
 
 {% if not products %}
-<div style="background: white; border: 1px solid #f2efea; padding: 60px; border-radius: 8px; text-align: center;">
+<div class="empty-box">
     <p style="color: #767676; margin-bottom: 25px; font-size: 15px;">Your bag is currently empty.</p>
     <a href="/" class="btn-submit" style="text-decoration: none; padding: 12px 24px; font-size: 12px; display: inline-block; width: auto;">Continue Browsing</a>
 </div>
 {% else %}
     {% for item in products %}
-    <div style="display: flex; background: white; border: 1px solid #f2efea; border-radius: 8px; padding: 20px; margin-bottom: 20px; align-items: center; justify-content: space-between; border: 1px solid #e5e7eb;">
-        <div style="display: flex; align-items: center;">
+    <div class="cart-item">
+        <div style="display: flex; align-items: center; gap: 16px; flex: 1;">
+            {% if item.image_url or item.images %}
+            <img src="{{ build_image_url(item.image_url or item.images) }}" alt="{{ item.title }}" class="cart-item-image">
+            {% else %}
+            <div class="cart-item-image" style="display: flex; align-items: center; justify-content: center; color: #767676; font-size: 11px;">No image</div>
+            {% endif %}
             <div>
                 <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700; color: #1c1c1c;">{{ item.title }}</h3>
                 <p style="margin: 0; font-size: 13px; color: #767676;">{{ item.brand }} &bull; Size {{ item.size }}</p>
@@ -30,12 +81,12 @@
         </div>
         <div style="text-align: right;">
             <div style="font-size: 18px; font-weight: 800; color: #1c1c1c; margin-bottom: 8px;">Rs. {{ "{:,.2f}".format(item.asking_price) }}</div>
-            <a href="/cart/remove/{{ item.id }}" style="color: #dc2626; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-decoration: none;">Remove</a>
+            <a href="/cart/remove/{{ item.id }}" class="remove-link">Remove</a>
         </div>
     </div>
     {% endfor %}
 
-    <div style="background: white; border: 1px solid #e5e7eb; padding: 30px; border-radius: 8px; margin-top: 30px; display: flex; justify-content: space-between; align-items: center;">
+    <div class="cart-total">
         <div>
             <span style="color: #767676; font-size: 14px;">Estimated Bag Total:</span>
             <div style="font-size: 24px; font-weight: 800; color: #1c1c1c; margin-top: 4px;">Rs. {{ "{:,.2f}".format(total) }}</div>
