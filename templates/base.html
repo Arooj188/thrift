@@ -116,7 +116,7 @@
         <a href="/" class="nav-logo">thrift</a>
         <div class="nav-links">
             <a href="/">Home</a>
-            <a href="/how-it-works" target="_blank" rel="noopener">How It Works</a>
+            <a href="/how-it-works">How It Works</a>
             {% if session.user_id %}
                 <span style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: #1c1c1c; letter-spacing: 0.5px;">Hello, {{ session.user_name }}</span>
                 <a href="/logout">Logout</a>
@@ -134,10 +134,18 @@
     </nav>
 
     <div class="container">
-        {% with messages = get_flashed_messages() %}
+        {% if session.user_id and not session.email_verified %}
+        <div class="flash-msg" style="background: #fef3c7; border-left-color: #92400e;">
+            <strong>Email verification pending.</strong>
+            Please check your inbox and verify your email to access all features.
+            <a href="/resend-verification" style="font-weight: 700; text-decoration: underline;">Resend verification email</a>
+        </div>
+        {% endif %}
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            {% for message in messages %}
-              <div class="flash-msg">{{ message }}</div>
+            {% for category, message in messages %}
+              <div class="flash-msg" style="{% if category == 'error' %}background: #fef2f2; border-left-color: #dc2626;{% elif category == 'success' %}background: #dcfce7; border-left-color: #166534;{% endif %}">{{ message }}</div>
             {% endfor %}
           {% endif %}
         {% endwith %}

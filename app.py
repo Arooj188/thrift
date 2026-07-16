@@ -1,10 +1,10 @@
 import importlib
 import json
 import os
+import secrets
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
-from datetime import timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from ai_service import analyze_item
@@ -45,6 +45,9 @@ if app.secret_key == 'super_secret_production_key_98765':
 app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
+# Ensure upload directory exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
 DATABASE_URL = os.environ.get('DATABASE_URL')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 
@@ -78,6 +81,9 @@ def build_image_url(image_value):
     normalized = value.replace('\\', '/').lstrip('/')
     if normalized.startswith('static/'):
         normalized = normalized[len('static/'):]
+
+    if normalized.startswith('uploads/'):
+        return f"{app.static_url_path}/{normalized}"
 
     candidate_path = os.path.normpath(os.path.join(app.root_path, 'static', normalized))
     if os.path.exists(candidate_path):
@@ -274,6 +280,8 @@ def ensure_schema():
         ("seller_rating", "REAL DEFAULT 0.0"),
         ("total_sales", "INTEGER DEFAULT 0"),
         ("is_admin", "INTEGER DEFAULT 0"),
+        ("verification_token", "TEXT"),
+        ("verification_expires", "TEXT"),
     ]
     for column_name, definition in user_columns:
         if not schema_has_column(conn, 'users', column_name):
@@ -533,6 +541,38 @@ def send_seller_email(to_email, seller_name, item_title, buyer_name, buyer_phone
         print(f"ITEM: {item_title} | BUYER: {buyer_name}")
         print(f"BUYER PHONE: {buyer_phone} | ADDRESS: {buyer_address}")
         print(f"TRACKING: {tracking_number}")
+        print("="*60 + "\n")
+        return None
+
+
+def generate_verification_token():
+    return secrets.token_urlsafe(32)
+
+
+def send_verification_email(to_email, token):
+    verification_url = url_for('verify_email', token=token, _external=True)
+    subject = "Verify your email - Thrift Marketplace"
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1c1c1c;">
+        <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 16px;">Verify Your Email</h1>
+        <p style="font-size: 14px; line-height: 1.6; color: #555;">Thank you for joining Thrift Marketplace!</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #555;">Please verify your email address by clicking the button below:</p>
+        <div style="margin: 30px 0;">
+            <a href="{verification_url}" style="background-color: #1c1c1c; color: #fbf9f6; padding: 14px 28px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 700; display: inline-block;">Verify Email Address</a>
+        </div>
+        <p style="font-size: 14px; line-height: 1.6; color: #555;">Or copy and paste this link into your browser:</p>
+        <p style="font-size: 13px; color: #767676; word-break: break-all;">{verification_url}</p>
+        <p style="font-size: 13px; color: #767676; margin-top: 30px;">This link will expire in 24 hours. If you did not create an account, please ignore this email.</p>
+    </div>
+    """
+    if RESEND_API_KEY:
+        return _send_email_via_resend(to_email, subject, html)
+    else:
+        print("\n" + "="*60)
+        print(f"[CONSOLE EMAIL OUTBOX] VERIFICATION EMAIL")
+        print(f"TO: {to_email}")
+        print(f"SUBJECT: {subject}")
+        print(f"VERIFICATION URL: {verification_url}")
         print("="*60 + "\n")
         return None
 
@@ -1269,12 +1309,13 @@ def signup():
 
         password_hash = generate_password_hash(password)
         join_date = datetime.utcnow()
+        verification_token = generate_verification_token()
+        verification_expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
         try:
-            # Check for an existing account with the same email (case-insensitive).
             if DATABASE_URL:
                 cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(%s)', (email,))
             else:
@@ -1283,8 +1324,6 @@ def signup():
                 flash('An account with this email already exists.')
                 return render_form()
 
-            # Only check the username when a non-empty username was provided.
-            # A blank username must NOT collide with other blank usernames.
             if username:
                 if DATABASE_URL:
                     cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(%s)', (username,))
@@ -1296,16 +1335,18 @@ def signup():
 
             if DATABASE_URL:
                 cursor.execute('''
-                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
+                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date, verification_token, verification_expires)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date, verification_token, verification_expires))
             else:
                 cursor.execute('''
-                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
+                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date, verification_token, verification_expires)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date, verification_token, verification_expires))
             conn.commit()
-            flash('Account created successfully! Please log in to continue.')
+
+            send_verification_email(email, verification_token)
+            flash('Account created successfully! Please check your email to verify your account before logging in.', 'success')
             return redirect(url_for('login'))
         except Exception as e:
             msg = str(e).lower()
@@ -1345,7 +1386,10 @@ def login():
         conn.close()
 
         if user and check_password_hash(user['password'], password):
-            # Regenerate session (clear old cookie) and set fresh session values
+            if not user.get('email_verified'):
+                flash('Please verify your email before logging in. Check your inbox for the verification link.', 'error')
+                return redirect(url_for('login'))
+
             session.clear()
             session.permanent = True
             session['user_id'] = user['user_id']
@@ -1363,8 +1407,121 @@ def login():
 
 @app.route('/logout')
 def logout():
-    # Clear out the browser session memory to log the user out safely
     session.clear()
+    return redirect(url_for('index'))
+
+
+@app.route('/verify/<token>')
+def verify_email(token):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if DATABASE_URL:
+        cursor.execute('SELECT user_id, email, email_verified, verification_expires FROM users WHERE verification_token = %s', (token,))
+        row = cursor.fetchone()
+        user = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
+    else:
+        user = cursor.execute('SELECT user_id, email, email_verified, verification_expires FROM users WHERE verification_token = ?', (token,)).fetchone()
+    conn.close()
+
+    if not user:
+        flash('Invalid or expired verification link.', 'error')
+        return redirect(url_for('login'))
+
+    if user.get('email_verified'):
+        flash('Email already verified. Please log in.', 'success')
+        return redirect(url_for('login'))
+
+    expires = user.get('verification_expires')
+    if expires:
+        try:
+            exp_dt = datetime.fromisoformat(expires)
+            if datetime.utcnow() > exp_dt:
+                flash('Verification link has expired. Please request a new one.', 'error')
+                return redirect(url_for('login'))
+        except Exception:
+            pass
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET email_verified = 1, verification_token = NULL, verification_expires = NULL WHERE user_id = ?', (user['user_id'],))
+    conn.commit()
+    conn.close()
+
+    flash('Email verified successfully! You can now log in.', 'success')
+    return redirect(url_for('login'))
+
+
+@app.route('/resend-verification', methods=['GET', 'POST'])
+def resend_verification():
+    if request.method == 'POST':
+        email = sanitize_input(request.form.get('email', '')).lower()
+        if not validate_email(email):
+            flash('Please provide a valid email address.', 'error')
+            return redirect(url_for('login'))
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if DATABASE_URL:
+            cursor.execute('SELECT user_id, email, email_verified FROM users WHERE lower(email) = lower(%s)', (email,))
+            row = cursor.fetchone()
+            user = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
+        else:
+            user = cursor.execute('SELECT user_id, email, email_verified FROM users WHERE lower(email) = lower(?)', (email,)).fetchone()
+        conn.close()
+
+        if not user:
+            flash('No account found with that email address.', 'error')
+            return redirect(url_for('signup'))
+
+        if user.get('email_verified'):
+            flash('Your email is already verified. Please log in.', 'success')
+            return redirect(url_for('login'))
+
+        token = generate_verification_token()
+        expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE users SET verification_token = ?, verification_expires = ? WHERE user_id = ?', (token, expires, user['user_id']))
+        conn.commit()
+        conn.close()
+
+        send_verification_email(user['email'], token)
+        flash('Verification email sent! Please check your inbox.', 'success')
+        return redirect(url_for('login'))
+
+    if 'user_id' not in session:
+        return render_template('resend_verification.html')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if DATABASE_URL:
+        cursor.execute('SELECT email, email_verified FROM users WHERE user_id = %s', (session['user_id'],))
+        row = cursor.fetchone()
+        user = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
+    else:
+        user = cursor.execute('SELECT email, email_verified FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+    conn.close()
+
+    if not user:
+        flash('User not found.', 'error')
+        return redirect(url_for('login'))
+
+    if user.get('email_verified'):
+        flash('Your email is already verified.', 'success')
+        return redirect(url_for('index'))
+
+    token = generate_verification_token()
+    expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET verification_token = ?, verification_expires = ? WHERE user_id = ?', (token, expires, session['user_id']))
+    conn.commit()
+    conn.close()
+
+    send_verification_email(user['email'], token)
+    flash('Verification email sent! Please check your inbox.', 'success')
     return redirect(url_for('index'))
 
 

@@ -2,10 +2,10 @@
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function () {
-        var cards = document.querySelectorAll('.hiw-card');
+        var steps = document.querySelectorAll('.hiw-step');
+        var parties = document.querySelectorAll('.hiw-party');
+        var allCards = [].concat(steps, parties);
 
-        // Reveal each card with a subtle fade + upward slide when it enters the viewport.
-        // Each card animates only once.
         if ('IntersectionObserver' in window) {
             var observer = new IntersectionObserver(function (entries, obs) {
                 entries.forEach(function (entry) {
@@ -14,20 +14,18 @@
                         obs.unobserve(entry.target);
                     }
                 });
-            }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
+            }, { threshold: 0.1, rootMargin: '0px 0px -5% 0px' });
 
-            cards.forEach(function (card, i) {
-                card.style.transitionDelay = (i * 90) + 'ms';
+            allCards.forEach(function (card, i) {
+                card.style.transitionDelay = (i * 80) + 'ms';
                 observer.observe(card);
             });
         } else {
-            // Fallback: reveal everything immediately if IntersectionObserver is unavailable.
-            cards.forEach(function (card) {
+            allCards.forEach(function (card) {
                 card.classList.add('is-visible');
             });
         }
 
-        // Gentle hover lift on the "Start Selling" call-to-action button.
         var ctaBtn = document.querySelector('.hiw-cta a.btn-sell');
         if (ctaBtn) {
             ctaBtn.addEventListener('mouseenter', function () {
@@ -38,7 +36,6 @@
             });
         }
 
-        // Smooth scrolling for any internal anchor links on this page.
         var internalLinks = document.querySelectorAll('a[href^="#"]');
         internalLinks.forEach(function (link) {
             link.addEventListener('click', function (e) {
