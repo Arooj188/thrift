@@ -2,27 +2,37 @@
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function () {
-        var steps = document.querySelectorAll('.hiw-step');
-        var parties = document.querySelectorAll('.hiw-party');
-        var allCards = [].concat(steps, parties);
+        var cards = document.querySelectorAll('.hiw-card');
+        var faqs = document.querySelectorAll('.hiw-faq-item');
+        var allItems = [].concat(cards, faqs);
+
+        function showItem(item, index) {
+            item.style.transitionDelay = (index * 80) + 'ms';
+            item.classList.add('is-visible');
+        }
 
         if ('IntersectionObserver' in window) {
             var observer = new IntersectionObserver(function (entries, obs) {
                 entries.forEach(function (entry) {
                     if (entry.isIntersecting) {
-                        entry.target.classList.add('is-visible');
+                        var index = allItems.indexOf(entry.target);
+                        showItem(entry.target, index >= 0 ? index : 0);
                         obs.unobserve(entry.target);
                     }
                 });
             }, { threshold: 0.1, rootMargin: '0px 0px -5% 0px' });
 
-            allCards.forEach(function (card, i) {
-                card.style.transitionDelay = (i * 80) + 'ms';
-                observer.observe(card);
+            allItems.forEach(function (item, i) {
+                var rect = item.getBoundingClientRect();
+                if (rect.top < window.innerHeight && rect.bottom > 0) {
+                    showItem(item, i);
+                } else {
+                    observer.observe(item);
+                }
             });
         } else {
-            allCards.forEach(function (card) {
-                card.classList.add('is-visible');
+            allItems.forEach(function (item, i) {
+                showItem(item, i);
             });
         }
 
@@ -35,18 +45,5 @@
                 ctaBtn.classList.remove('hiw-btn-hover');
             });
         }
-
-        var internalLinks = document.querySelectorAll('a[href^="#"]');
-        internalLinks.forEach(function (link) {
-            link.addEventListener('click', function (e) {
-                var id = link.getAttribute('href').slice(1);
-                if (!id) { return; }
-                var target = document.getElementById(id);
-                if (target) {
-                    e.preventDefault();
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            });
-        });
     });
 })();

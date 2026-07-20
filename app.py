@@ -1,7 +1,6 @@
 import importlib
 import json
 import os
-import secrets
 import sqlite3
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
@@ -280,8 +279,6 @@ def ensure_schema():
         ("seller_rating", "REAL DEFAULT 0.0"),
         ("total_sales", "INTEGER DEFAULT 0"),
         ("is_admin", "INTEGER DEFAULT 0"),
-        ("verification_token", "TEXT"),
-        ("verification_expires", "TEXT"),
     ]
     for column_name, definition in user_columns:
         if not schema_has_column(conn, 'users', column_name):
@@ -318,6 +315,7 @@ def ensure_schema():
         ("delivery_note", "TEXT"),
         ("seller_amount", "REAL"),
         ("platform_commission", "REAL"),
+        ("order_total", "REAL"),
         ("payout_status", "TEXT DEFAULT 'Pending'"),
         ("payout_date", "TEXT"),
         ("payment_date", "TEXT"),
@@ -544,38 +542,6 @@ def send_seller_email(to_email, seller_name, item_title, buyer_name, buyer_phone
         print("="*60 + "\n")
         return None
 
-
-def generate_verification_token():
-    return secrets.token_urlsafe(32)
-
-
-def send_verification_email(to_email, token):
-    verification_url = url_for('verify_email', token=token, _external=True)
-    subject = "Verify your email - Thrift Marketplace"
-    html = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1c1c1c;">
-        <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 16px;">Verify Your Email</h1>
-        <p style="font-size: 14px; line-height: 1.6; color: #555;">Thank you for joining Thrift Marketplace!</p>
-        <p style="font-size: 14px; line-height: 1.6; color: #555;">Please verify your email address by clicking the button below:</p>
-        <div style="margin: 30px 0;">
-            <a href="{verification_url}" style="background-color: #1c1c1c; color: #fbf9f6; padding: 14px 28px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 700; display: inline-block;">Verify Email Address</a>
-        </div>
-        <p style="font-size: 14px; line-height: 1.6; color: #555;">Or copy and paste this link into your browser:</p>
-        <p style="font-size: 13px; color: #767676; word-break: break-all;">{verification_url}</p>
-        <p style="font-size: 13px; color: #767676; margin-top: 30px;">This link will expire in 24 hours. If you did not create an account, please ignore this email.</p>
-    </div>
-    """
-    if RESEND_API_KEY:
-        return _send_email_via_resend(to_email, subject, html)
-    else:
-        print("\n" + "="*60)
-        print(f"[CONSOLE EMAIL OUTBOX] VERIFICATION EMAIL")
-        print(f"TO: {to_email}")
-        print(f"SUBJECT: {subject}")
-        print(f"VERIFICATION URL: {verification_url}")
-        print("="*60 + "\n")
-        return None
-
 @app.before_request
 def ensure_cart_exists():
     if 'cart' not in session:
@@ -744,6 +710,7 @@ def place_order():
 
         seller_id = product['seller_id']
         amount = float(product['asking_price'])
+        order_total = round(amount, 2)
         seller_amount = round(amount * 0.90, 2)
         platform_commission = round(amount * 0.10, 2)
         tracking_num = f"TRK{product['id']}{int(datetime.utcnow().timestamp())}PK"
@@ -757,13 +724,13 @@ def place_order():
             cursor.execute('''
                 INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
                     buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
-                    seller_amount, platform_commission, payout_status, payout_date, payment_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING order_id
             ''', (
                 product['id'], buyer_id, seller_id, 'Paid', buyer_name, buyer_email, buyer_phone,
                 street, city, '', '', full_delivery_note,
-                    tracking_num, seller_amount, platform_commission, 'Pending', None, datetime.utcnow(),
+                    tracking_num, seller_amount, platform_commission, order_total, 'Pending', None, datetime.utcnow(),
             ))
             order_id = cursor.fetchone()[0]
             cursor.execute('UPDATE Products SET status=%s, tracking_number=%s, order_id=%s WHERE id=%s',
@@ -772,12 +739,12 @@ def place_order():
             cursor.execute('''
                 INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
                     buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
-                    seller_amount, platform_commission, payout_status, payout_date, payment_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 product['id'], buyer_id, seller_id, 'Paid', buyer_name, buyer_email, buyer_phone,
                 street, city, '', '', full_delivery_note, tracking_num,
-                seller_amount, platform_commission, 'Pending', None, datetime.utcnow(),
+                seller_amount, platform_commission, order_total, 'Pending', None, datetime.utcnow(),
             ))
             order_id = cursor.lastrowid
             cursor.execute('UPDATE Products SET status=?, tracking_number=?, order_id=? WHERE id=?',
@@ -1067,8 +1034,9 @@ def admin_dashboard():
     
     conn.close()
     
-    total_revenue = round(sum(item.get('product_price', 0) or 0 for item in orders), 2)
+    total_revenue = round(sum(item.get('order_total', 0) or item.get('product_price', 0) or 0 for item in orders), 2)
     total_commission = round(sum(item.get('platform_commission', 0) or 0 for item in orders), 2)
+    total_seller_payouts = round(sum(item.get('seller_amount', 0) or 0 for item in orders), 2)
     pending_payouts = sum(1 for item in orders if item.get('payout_status') == 'Pending')
     
     return render_template('admin_dashboard.html',
@@ -1078,6 +1046,7 @@ def admin_dashboard():
         listings=listings,
         total_revenue=total_revenue,
         total_commission=total_commission,
+        total_seller_payouts=total_seller_payouts,
         pending_payouts=pending_payouts,
         category_stats=category_stats,
         current_admin_id=session.get('user_id')
@@ -1309,8 +1278,6 @@ def signup():
 
         password_hash = generate_password_hash(password)
         join_date = datetime.utcnow()
-        verification_token = generate_verification_token()
-        verification_expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1335,18 +1302,16 @@ def signup():
 
             if DATABASE_URL:
                 cursor.execute('''
-                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date, verification_token, verification_expires)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date, verification_token, verification_expires))
+                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
             else:
                 cursor.execute('''
-                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date, verification_token, verification_expires)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date, verification_token, verification_expires))
+                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
             conn.commit()
-
-            send_verification_email(email, verification_token)
-            flash('Account created successfully! Please check your email to verify your account before logging in.', 'success')
+            flash('Account created successfully! Please log in to continue.')
             return redirect(url_for('login'))
         except Exception as e:
             msg = str(e).lower()
@@ -1386,10 +1351,6 @@ def login():
         conn.close()
 
         if user and check_password_hash(user['password'], password):
-            if not user.get('email_verified'):
-                flash('Please verify your email before logging in. Check your inbox for the verification link.', 'error')
-                return redirect(url_for('login'))
-
             session.clear()
             session.permanent = True
             session['user_id'] = user['user_id']
@@ -1408,120 +1369,6 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('index'))
-
-
-@app.route('/verify/<token>')
-def verify_email(token):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('SELECT user_id, email, email_verified, verification_expires FROM users WHERE verification_token = %s', (token,))
-        row = cursor.fetchone()
-        user = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
-    else:
-        user = cursor.execute('SELECT user_id, email, email_verified, verification_expires FROM users WHERE verification_token = ?', (token,)).fetchone()
-    conn.close()
-
-    if not user:
-        flash('Invalid or expired verification link.', 'error')
-        return redirect(url_for('login'))
-
-    if user.get('email_verified'):
-        flash('Email already verified. Please log in.', 'success')
-        return redirect(url_for('login'))
-
-    expires = user.get('verification_expires')
-    if expires:
-        try:
-            exp_dt = datetime.fromisoformat(expires)
-            if datetime.utcnow() > exp_dt:
-                flash('Verification link has expired. Please request a new one.', 'error')
-                return redirect(url_for('login'))
-        except Exception:
-            pass
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('UPDATE users SET email_verified = 1, verification_token = NULL, verification_expires = NULL WHERE user_id = ?', (user['user_id'],))
-    conn.commit()
-    conn.close()
-
-    flash('Email verified successfully! You can now log in.', 'success')
-    return redirect(url_for('login'))
-
-
-@app.route('/resend-verification', methods=['GET', 'POST'])
-def resend_verification():
-    if request.method == 'POST':
-        email = sanitize_input(request.form.get('email', '')).lower()
-        if not validate_email(email):
-            flash('Please provide a valid email address.', 'error')
-            return redirect(url_for('login'))
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        if DATABASE_URL:
-            cursor.execute('SELECT user_id, email, email_verified FROM users WHERE lower(email) = lower(%s)', (email,))
-            row = cursor.fetchone()
-            user = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
-        else:
-            user = cursor.execute('SELECT user_id, email, email_verified FROM users WHERE lower(email) = lower(?)', (email,)).fetchone()
-        conn.close()
-
-        if not user:
-            flash('No account found with that email address.', 'error')
-            return redirect(url_for('signup'))
-
-        if user.get('email_verified'):
-            flash('Your email is already verified. Please log in.', 'success')
-            return redirect(url_for('login'))
-
-        token = generate_verification_token()
-        expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('UPDATE users SET verification_token = ?, verification_expires = ? WHERE user_id = ?', (token, expires, user['user_id']))
-        conn.commit()
-        conn.close()
-
-        send_verification_email(user['email'], token)
-        flash('Verification email sent! Please check your inbox.', 'success')
-        return redirect(url_for('login'))
-
-    if 'user_id' not in session:
-        return render_template('resend_verification.html')
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('SELECT email, email_verified FROM users WHERE user_id = %s', (session['user_id'],))
-        row = cursor.fetchone()
-        user = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
-    else:
-        user = cursor.execute('SELECT email, email_verified FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-    conn.close()
-
-    if not user:
-        flash('User not found.', 'error')
-        return redirect(url_for('login'))
-
-    if user.get('email_verified'):
-        flash('Your email is already verified.', 'success')
-        return redirect(url_for('index'))
-
-    token = generate_verification_token()
-    expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('UPDATE users SET verification_token = ?, verification_expires = ? WHERE user_id = ?', (token, expires, session['user_id']))
-    conn.commit()
-    conn.close()
-
-    send_verification_email(user['email'], token)
-    flash('Verification email sent! Please check your inbox.', 'success')
     return redirect(url_for('index'))
 
 

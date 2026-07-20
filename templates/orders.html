@@ -71,7 +71,7 @@
             <p class="order-meta">Brand: {{ order.brand }} | Size: {{ order.size }} | Color: {{ order.color }}</p>
             <p class="order-status"><strong>Order Status:</strong> {{ order.status }}</p>
             <p class="order-status"><strong>Tracking Code:</strong> {{ order.tracking_number }}</p>
-            <div class="order-price">Rs. {{ "{:,.2f}".format(order.seller_amount + order.platform_commission) if order.seller_amount and order.platform_commission else '0.00' }}</div>
+            <div class="order-price">Rs. {{ "{:,.2f}".format(order.order_total or order.seller_amount + order.platform_commission or 0) }}</div>
             <span class="order-badge">{{ order.status }}</span>
             <div class="order-address">
                 <div><strong>Delivery Address:</strong> {{ order.buyer_street_address }}, {{ order.buyer_city }}, {{ order.buyer_province }}, {{ order.buyer_postal_code }}</div>

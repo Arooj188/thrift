@@ -30,95 +30,77 @@
         margin: 50px 0 24px 0;
     }
 
-    .hiw-flow {
-        display: flex;
-        flex-direction: column;
+    .hiw-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 20px;
     }
-    .hiw-step {
-        display: grid;
-        grid-template-columns: 48px 1fr;
-        gap: 20px;
+    .hiw-card {
         background: #ffffff;
         border: 1px solid #e5e7eb;
         border-radius: 16px;
         padding: 28px;
-        opacity: 0;
-        transform: translateY(24px);
-        transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.25s ease;
-    }
-    .hiw-step.is-visible {
         opacity: 1;
         transform: translateY(0);
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
     }
-    .hiw-step:hover {
+    .hiw-card:hover {
         transform: translateY(-4px);
         box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
     }
-    .hiw-step-num {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+    .hiw-card-icon {
         width: 48px;
         height: 48px;
         border-radius: 12px;
         background: #f2efea;
-        color: #1c1c1c;
-        font-size: 18px;
-        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+        font-size: 22px;
     }
-    .hiw-step h3 {
+    .hiw-card h3 {
         margin: 0 0 8px 0;
         font-size: 18px;
         font-weight: 700;
         color: #1c1c1c;
     }
-    .hiw-step p {
+    .hiw-card p {
         margin: 0;
         font-size: 14px;
-        line-height: 1.65;
+        line-height: 1.6;
         color: #555555;
-    }
-    .hiw-step ul {
-        margin: 8px 0 0 0;
-        padding-left: 18px;
-        color: #555555;
-        font-size: 14px;
-        line-height: 1.7;
-    }
-    .hiw-step li {
-        margin-bottom: 4px;
     }
 
-    .hiw-parties {
+    .hiw-faq {
+        margin-top: 20px;
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 20px;
-        margin-top: 20px;
     }
-    .hiw-party {
+    .hiw-faq-item {
         background: #ffffff;
         border: 1px solid #e5e7eb;
         border-radius: 16px;
-        padding: 28px;
-        opacity: 0;
-        transform: translateY(24px);
-        transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.25s ease;
-    }
-    .hiw-party.is-visible {
+        padding: 24px;
         opacity: 1;
         transform: translateY(0);
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
     }
-    .hiw-party h3 {
-        margin: 0 0 12px 0;
-        font-size: 18px;
+    .hiw-faq-item:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+    }
+    .hiw-faq-item h4 {
+        margin: 0 0 8px 0;
+        font-size: 15px;
         font-weight: 700;
         color: #1c1c1c;
     }
-    .hiw-party p {
+    .hiw-faq-item p {
         margin: 0;
-        font-size: 14px;
-        line-height: 1.65;
+        font-size: 13px;
+        line-height: 1.55;
         color: #555555;
     }
 
@@ -155,135 +137,74 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .hiw-step, .hiw-party {
-            opacity: 1;
-            transform: none;
+        .hiw-card, .hiw-faq-item {
             transition: none;
-        }
-        .hiw-step.is-visible, .hiw-party.is-visible {
-            opacity: 1;
-            transform: none;
         }
     }
 
     @media (max-width: 640px) {
         .hiw-hero { padding: 40px 0 20px 0; }
         .hiw-hero h1 { font-size: 34px; }
-        .hiw-step { grid-template-columns: 1fr; }
-        .hiw-step-num { width: 40px; height: 40px; font-size: 16px; }
+        .hiw-cards { grid-template-columns: 1fr; }
+        .hiw-faq { grid-template-columns: 1fr; }
         .hiw-cta { padding: 36px 22px; }
     }
 </style>
 
 <div class="hiw-hero">
     <h1>How It Works</h1>
-    <p>From signup to delivery, here is exactly how Pakistan's thrift marketplace operates for buyers and sellers.</p>
+    <p>Buy and sell pre-loved fashion in four simple steps.</p>
 </div>
 
-<h2 class="hiw-section-title">Buyer Journey</h2>
+<h2 class="hiw-section-title">The Marketplace Flow</h2>
 
-<div class="hiw-flow">
-    <div class="hiw-step">
-        <div class="hiw-step-num">1</div>
-        <div>
-            <h3>Create an Account</h3>
-            <p>Sign up with your name, email, phone number, and address. You will receive a verification email—click the link to activate your account. Verified accounts can buy, sell, and track orders.</p>
-        </div>
+<div class="hiw-cards">
+    <div class="hiw-card">
+        <div class="hiw-card-icon">📦</div>
+        <h3>List Your Item</h3>
+        <p>Upload clear photos, write an accurate description, choose the item's condition and price, then publish your listing so buyers can easily find it.</p>
     </div>
 
-    <div class="hiw-step">
-        <div class="hiw-step-num">2</div>
-        <div>
-            <h3>Browse & Discover</h3>
-            <p>Explore pre-listed clothing and shoes from sellers across Pakistan. Filter by category, view item details, condition summaries, and photos. Ask sellers public questions before buying.</p>
-        </div>
+    <div class="hiw-card">
+        <div class="hiw-card-icon">🛒</div>
+        <h3>Buyer Places an Order</h3>
+        <p>Buyers browse the marketplace, view product details, and place an order for the item they want to purchase.</p>
     </div>
 
-    <div class="hiw-step">
-        <div class="hiw-step-num">3</div>
-        <div>
-            <h3>Add to Bag & Checkout</h3>
-            <p>Add items to your shopping bag, review your order, and proceed to checkout. Enter your shipping details, choose a courier (TCS, Leopards, or M&P), and select Cash on Delivery or Bank Transfer.</p>
-        </div>
+    <div class="hiw-card">
+        <div class="hiw-card-icon">🚚</div>
+        <h3>Pack & Ship</h3>
+        <p>Once you receive an order, carefully pack the item and ship it using the order details provided by the platform.</p>
     </div>
 
-    <div class="hiw-step">
-        <div class="hiw-step-num">4</div>
-        <div>
-            <h3>Order Confirmation</h3>
-            <p>Once your order is placed, you will receive an instant confirmation email with your tracking number, item details, and delivery address. The order status will update as it moves through the platform.</p>
-        </div>
-    </div>
-
-    <div class="hiw-step">
-        <div class="hiw-step-num">5</div>
-        <div>
-            <h3>Shipping & Delivery</h3>
-            <p>Sellers ship items via the selected courier service. You can track your order status in your account—from Paid to Shipped to Delivered. Keep an eye on your email for shipping updates.</p>
-        </div>
-    </div>
-
-    <div class="hiw-step">
-        <div class="hiw-step-num">6</div>
-        <div>
-            <h3>Order Tracking</h3>
-            <p>Visit the <strong>Track Orders</strong> page anytime to see your order history, current status, tracking codes, and delivery notes. This page is only accessible to authenticated users.</p>
-        </div>
+    <div class="hiw-card">
+        <div class="hiw-card-icon">✅</div>
+        <h3>Order Completed</h3>
+        <p>After a successful sale, the platform deducts a 10% commission and the seller receives the remaining amount.</p>
     </div>
 </div>
 
-<h2 class="hiw-section-title">Seller Journey</h2>
+<h2 class="hiw-section-title">FAQ</h2>
 
-<div class="hiw-flow">
-    <div class="hiw-step">
-        <div class="hiw-step-num">1</div>
-        <div>
-            <h3>List Your Item</h3>
-            <p>After logging in, go to <strong>List Item for Sale</strong>. Upload photos, set a price, describe the condition, and provide your pickup address. Our AI assistant helps categorize your listing and improve the description.</p>
-        </div>
+<div class="hiw-faq">
+    <div class="hiw-faq-item">
+        <h4>How do I create an account?</h4>
+        <p>Click Sign Up, fill in your details, and start browsing or selling immediately.</p>
     </div>
 
-    <div class="hiw-step">
-        <div class="hiw-step-num">2</div>
-        <div>
-            <h3>Receive Orders</h3>
-            <p>When a buyer purchases your item, you will receive an instant email notification with the buyer's details, shipping address, and tracking number. Prepare the item for shipment right away.</p>
-        </div>
+    <div class="hiw-faq-item">
+        <h4>How do I list a product?</h4>
+        <p>Go to Sell, upload photos, set a price, and submit. Your listing goes live instantly.</p>
     </div>
 
-    <div class="hiw-step">
-        <div class="hiw-step-num">3</div>
-        <div>
-            <h3>Ship & Earn</h3>
-            <p>Hand the item over to the selected courier with the provided tracking number. Once the order is marked complete, 90% of the sale price goes directly to you. The remaining 10% is the platform commission.</p>
-        </div>
+    <div class="hiw-faq-item">
+        <h4>How does shipping work?</h4>
+        <p>Sellers ship items via TCS, Leopards, or M&P. Buyers receive a tracking number after checkout.</p>
     </div>
-</div>
 
-<h2 class="hiw-section-title">Buyer & Seller Responsibilities</h2>
-
-<div class="hiw-parties">
-    <div class="hiw-party">
-        <h3>Buyer Responsibilities</h3>
-        <ul>
-            <li>Provide accurate shipping details at checkout</li>
-            <li>Be available at the provided address for delivery</li>
-            <li>Inspect items upon arrival and report issues promptly</li>
-            <li>Use the platform's tracking system for order updates</li>
-        </ul>
-    </div>
-    <div class="hiw-party">
-        <h3>Seller Responsibilities</h3>
-        <ul>
-            <li>List items with honest descriptions and clear photos</li>
-            <li>Ship items within a reasonable timeframe</li>
-            <li>Provide accurate tracking information</li>
-            <li>Respond to buyer questions on product pages</li>
-        </ul>
-    </div>
-    <div class="hiw-party">
-        <h3>Platform Commission</h3>
-        <p>Thrift Marketplace charges a <strong>10% commission</strong> on every successful sale. This covers payment processing, order management, buyer-seller matching, and customer support. Sellers receive 90% of the final sale price.</p>
+    <div class="hiw-faq-item">
+        <h4>When do sellers get paid?</h4>
+        <p>Sellers receive their payout after the order is completed, minus the 10% platform commission.</p>
     </div>
 </div>
 
@@ -300,30 +221,6 @@
 <script src="{{ url_for('static', filename='js/how_it_works.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var steps = document.querySelectorAll('.hiw-step');
-    var parties = document.querySelectorAll('.hiw-party');
-    var allCards = [].concat(steps, parties);
-
-    if ('IntersectionObserver' in window) {
-        var observer = new IntersectionObserver(function (entries, obs) {
-            entries.forEach(function (entry) {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('is-visible');
-                    obs.unobserve(entry.target);
-                }
-            });
-        }, { threshold: 0.1, rootMargin: '0px 0px -5% 0px' });
-
-        allCards.forEach(function (card, i) {
-            card.style.transitionDelay = (i * 80) + 'ms';
-            observer.observe(card);
-        });
-    } else {
-        allCards.forEach(function (card) {
-            card.classList.add('is-visible');
-        });
-    }
-
     var ctaBtn = document.querySelector('.hiw-cta a.btn-sell');
     if (ctaBtn) {
         ctaBtn.addEventListener('mouseenter', function () {
