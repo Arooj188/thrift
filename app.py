@@ -69,7 +69,9 @@ def build_image_url(image_value):
     if value.startswith('[') and value.endswith(']'):
         try:
             parsed = json.loads(value)
-            if isinstance(parsed, list) and parsed:
+            if isinstance(parsed, list):
+                if not parsed:
+                    return f"{app.static_url_path}/placeholder.svg"
                 return build_image_url(parsed[0])
         except Exception:
             pass
@@ -84,14 +86,29 @@ def build_image_url(image_value):
     if normalized.startswith('uploads/'):
         return f"{app.static_url_path}/{normalized}"
 
-    candidate_path = os.path.normpath(os.path.join(app.root_path, 'static', normalized))
-    if os.path.exists(candidate_path):
-        return f"{app.static_url_path}/{normalized}"
+    return f"{app.static_url_path}/{normalized}"
 
-    return f"{app.static_url_path}/placeholder.svg"
+
+def has_product_image(image_url, images):
+    """Check if a product has at least one actual image."""
+    if image_url and image_url.strip():
+        return True
+    if images:
+        images_str = str(images).strip()
+        if images_str.startswith('[') and images_str.endswith(']'):
+            try:
+                parsed = json.loads(images_str)
+                if isinstance(parsed, list) and parsed:
+                    return True
+            except Exception:
+                pass
+        elif images_str:
+            return True
+    return False
 
 
 app.jinja_env.globals['build_image_url'] = build_image_url
+app.jinja_env.globals['has_product_image'] = has_product_image
 
 
 def get_db_connection():
@@ -414,7 +431,8 @@ def save_uploaded_images(files):
                 timestamp = int(datetime.utcnow().timestamp() * 1000)
                 unique_name = f"{timestamp}_{filename}"
                 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-                image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_name))
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
+                image_file.save(save_path)
                 saved_paths.append(f"uploads/{unique_name}")
             except Exception as e:
                 print(f"Image upload error: {e}")

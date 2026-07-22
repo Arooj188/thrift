@@ -116,17 +116,15 @@
 <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; margin-top: 20px; align-items: start;">
     <div class="product-gallery">
         <div class="product-thumbs">
-            {% if image_list %}
+            {% if has_product_image(product.image_url, product.images) %}
                 {% for img in image_list[:4] %}
                 <img src="{{ build_image_url(img) }}" alt="{{ product.title }}" onclick="document.getElementById('mainImage').src='{{ build_image_url(img) }}'">
                 {% endfor %}
-            {% elif product.image_url %}
-                <img src="{{ build_image_url(product.image_url) }}" alt="{{ product.title }}" onclick="document.getElementById('mainImage').src='{{ build_image_url(product.image_url) }}'">
             {% endif %}
         </div>
         <div class="product-main">
-            {% if image_list or product.image_url %}
-            <img src="{{ build_image_url(image_list[0] if image_list else product.image_url) }}" id="mainImage" alt="{{ product.title }}">
+            {% if has_product_image(product.image_url, product.images) %}
+            <img src="{{ build_image_url(image_list[0]) }}" id="mainImage" alt="{{ product.title }}">
             {% else %}
             <div style="width: 100%; height: 100%; min-height: 400px; display: flex; align-items: center; justify-content: center; color: #767676;">No image available</div>
             {% endif %}

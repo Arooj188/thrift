@@ -3,20 +3,20 @@
 <style>
     .seller-card {
         display: grid;
-        grid-template-columns: 140px 2fr 1fr;
-        gap: 20px;
+        grid-template-columns: 100px 1fr auto;
+        gap: 16px;
         align-items: center;
         background: white;
         border: 1px solid #e5e7eb;
         border-radius: 16px;
-        padding: 22px;
-        margin-bottom: 16px;
+        padding: 16px;
+        margin-bottom: 12px;
     }
     .seller-card .image-wrap {
-        width: 140px;
-        height: 140px;
+        width: 100px;
+        height: 100px;
         background: #f2efea;
-        border-radius: 14px;
+        border-radius: 12px;
         overflow: hidden;
         display: flex;
         align-items: center;
@@ -28,29 +28,32 @@
         object-fit: cover;
     }
     .seller-card h2 {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
-        margin: 0 0 6px 0;
+        margin: 0 0 4px 0;
+        line-height: 1.3;
     }
     .seller-card .meta {
         color: #767676;
-        font-size: 14px;
-        margin: 0 8px 10px 0;
+        font-size: 13px;
+        margin: 0 0 6px 0;
+        line-height: 1.4;
     }
     .seller-card .price {
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 800;
         color: #1c1c1c;
         margin: 0;
+        line-height: 1.3;
     }
     .seller-card .status-line {
-        font-size: 13px;
+        font-size: 12px;
         color: #555555;
-        margin: 10px 0 0 0;
+        margin: 6px 0 0 0;
+        line-height: 1.4;
     }
     .btn-delete {
-        width: 100%;
-        padding: 10px 16px;
+        padding: 8px 14px;
         border: 1px solid #e5e7eb;
         border-radius: 10px;
         background: white;
@@ -59,29 +62,60 @@
         font-size: 13px;
         font-weight: 600;
         transition: background 0.2s ease, border-color 0.2s ease;
+        white-space: nowrap;
     }
     .btn-delete:hover {
         background: #fef2f2;
         border-color: #fecaca;
         color: #dc2626;
     }
+
+    @media (max-width: 900px) {
+        .seller-card {
+            grid-template-columns: 80px 1fr;
+            gap: 12px;
+            padding: 14px;
+        }
+        .seller-card .image-wrap {
+            width: 80px;
+            height: 80px;
+            border-radius: 10px;
+        }
+        .seller-card h2 {
+            font-size: 15px;
+        }
+        .seller-card .meta {
+            font-size: 12px;
+        }
+        .seller-card .price {
+            font-size: 14px;
+        }
+        .seller-card .status-line {
+            font-size: 11px;
+        }
+        .btn-delete {
+            grid-column: 2;
+            justify-self: start;
+            margin-top: 4px;
+        }
+    }
 </style>
 <div class="form-box" style="max-width: 1000px;">
     <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 10px;">My Listings</h1>
-    <p style="font-size: 14px; color: #767676; margin-bottom: 30px;">Manage your active and sold thrift items from one place.</p>
+    <p style="font-size: 14px; color: #767676; margin-bottom: 24px;">Manage your active and sold thrift items from one place.</p>
     {% if not listings %}
-        <div style="background: white; padding: 24px; border-radius: 16px; border: 1px solid #e5e7eb;">
-            <p style="margin: 0; color: #767676;">You have no listings yet. Head over to <a href="/sell">Sell</a> to add new items.</p>
+        <div style="background: white; padding: 20px; border-radius: 16px; border: 1px solid #e5e7eb;">
+            <p style="margin: 0; color: #767676; font-size: 14px;">You have no listings yet. Head over to <a href="/sell">Sell</a> to add new items.</p>
         </div>
     {% else %}
-        <div style="display: grid; gap: 16px;">
+        <div style="display: grid; gap: 12px;">
             {% for listing in listings %}
                 <div class="seller-card">
                     <div class="image-wrap">
-                        {% if listing.image_url or listing.images %}
+                        {% if has_product_image(listing.image_url, listing.images) %}
                         <img src="{{ build_image_url(listing.image_url or listing.images) }}" alt="{{ listing.title }}">
                         {% else %}
-                        <span style="color: #767676; font-size: 13px;">No image</span>
+                        <span style="color: #767676; font-size: 12px;">No image</span>
                         {% endif %}
                     </div>
                     <div>
@@ -100,11 +134,4 @@
         </div>
     {% endif %}
 </div>
-<style>
-@media (max-width: 900px) {
-  .form-box { padding: 24px !important; }
-  .seller-card { grid-template-columns: 1fr !important; }
-  .seller-card .image-wrap { max-width: 100% !important; height: 220px !important; }
-}
-</style>
 {% endblock %}

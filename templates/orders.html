@@ -64,7 +64,7 @@
     {% for order in orders %}
     <div class="order-card">
         {% if order.product_title %}
-        <img src="{{ build_image_url(order.image_url or order.images) if order.image_url or order.images else '/static/placeholder.svg' }}" alt="{{ order.product_title }}" class="order-thumb">
+        <img src="{{ build_image_url(order.image_url or order.images) if has_product_image(order.image_url, order.images) else '/static/placeholder.svg' }}" alt="{{ order.product_title }}" class="order-thumb">
         {% endif %}
         <div class="order-details">
             <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700;">{{ order.product_title }}</h3>

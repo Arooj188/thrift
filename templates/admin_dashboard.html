@@ -255,11 +255,11 @@
               {% for l in listings %}
               <tr>
                 <td style="width: 70px;">
-                  {% if l.image_url or l.images %}
-                  <img src="{{ build_image_url(l.image_url or l.images) }}" alt="{{ l.title }}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; background: #f2efea;">
-                  {% else %}
-                  <div style="width: 60px; height: 60px; background: #f2efea; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #767676; font-size: 11px;">No img</div>
-                  {% endif %}
+                   {% if has_product_image(l.image_url, l.images) %}
+                   <img src="{{ build_image_url(l.image_url or l.images) }}" alt="{{ l.title }}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; background: #f2efea;">
+                   {% else %}
+                   <div style="width: 60px; height: 60px; background: #f2efea; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #767676; font-size: 11px;">No img</div>
+                   {% endif %}
                 </td>
                 <td>{{ l.id }}</td>
                 <td>{{ l.title }}</td>

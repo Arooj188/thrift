@@ -69,7 +69,7 @@
     {% for item in products %}
     <div class="cart-item">
         <div style="display: flex; align-items: center; gap: 16px; flex: 1;">
-            {% if item.image_url or item.images %}
+            {% if has_product_image(item.image_url, item.images) %}
             <img src="{{ build_image_url(item.image_url or item.images) }}" alt="{{ item.title }}" class="cart-item-image">
             {% else %}
             <div class="cart-item-image" style="display: flex; align-items: center; justify-content: center; color: #767676; font-size: 11px;">No image</div>
