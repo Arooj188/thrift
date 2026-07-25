@@ -156,9 +156,12 @@
             <div><span style="color: #767676;">Color:</span> <strong>{{ product.color }}</strong></div>
         </div>
 
-        <form action="/cart/add/{{ product.id }}" method="POST">
+        <form action="/cart/add/{{ product.id }}" method="POST" style="display: inline; margin-right: 8px;">
             <button type="submit" class="btn-submit" style="padding: 16px 28px;">Add to Shopping Bag</button>
         </form>
+        {% if session.user_id and session.user_id != product.seller_id %}
+        <a href="/messages?to={{ product.seller_id }}&product={{ product.id }}" class="btn-submit" style="padding: 16px 28px; text-decoration: none; display: inline-block; background: #ffffff; color: #1c1c1c; border: 1px solid #e5e7eb;">Message Seller</a>
+        {% endif %}
         
         <div class="qna-box">
             <h3>Questions & Answers</h3>

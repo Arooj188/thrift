@@ -5,29 +5,34 @@
         <h1 style="font-size: 32px; font-weight: 800; margin: 0 0 6px 0;">Checkout</h1>
         <p style="font-size: 14px; color: #767676; margin-bottom: 40px;">Complete your purchase securely.</p>
 
+        <div style="background: #fbf9f6; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 24px; font-size: 13px; color: #555; line-height: 1.6;">
+            <strong style="color: #1c1c1c;">Protected Marketplace:</strong> Your checkout is encrypted and secure. We never store payment card details. Platform commission is deducted from the seller's payout, not added to your bill.
+        </div>
+
         <form action="/place_order" method="POST">
             <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #1c1c1c; margin-bottom: 24px; border-bottom: 1px solid #e8e4dc; padding-bottom: 10px;">Shipping Details</div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <div class="form-group" style="grid-column: span 2;">
                     <label>Full Name</label>
-                    <input type="text" name="buyer_name" required>
+                    <input type="text" name="buyer_name" required value="{{ user.name if user else '' }}">
                 </div>
                 <div class="form-group">
                     <label>Phone Number</label>
-                    <input type="text" name="buyer_phone" required placeholder="03001234567">
+                    <input type="text" name="buyer_phone" required placeholder="03001234567" value="{{ user.phone if user else '' }}">
                 </div>
                 <div class="form-group">
                     <label>City</label>
-                    <input type="text" name="buyer_city" required placeholder="Lahore">
+                    <input type="text" name="buyer_city" required placeholder="Lahore" value="{{ user.city if user else '' }}">
                 </div>
                 <div class="form-group" style="grid-column: span 2;">
                     <label>Street Address</label>
-                    <input type="text" name="buyer_address_street" required placeholder="House No, Street Name, Sector/Block">
+                    <input type="text" name="buyer_address_street" required placeholder="House No, Street Name, Sector/Block" value="{{ user.street_address if user else '' }}">
                 </div>
                 <div class="form-group" style="grid-column: span 2;">
                     <label>Shipping Company</label>
                     <select name="shipping_company" required>
+                        <option value="">Select courier</option>
                         <option value="TCS">TCS</option>
                         <option value="Leopards">Leopards</option>
                         <option value="M&P Courier">M&P Courier</option>
@@ -36,7 +41,7 @@
                 <div class="form-group" style="grid-column: span 2;">
                     <label>Payment Method</label>
                     <select name="payment_method" id="paymentMethod" required onchange="toggleBankDetails()">
-                        <option value="COD">Cash on Delivery</option>
+                        <option value="Online Payment">Online Payment</option>
                         <option value="Bank Transfer">Bank Transfer</option>
                     </select>
                 </div>
@@ -68,19 +73,19 @@
         </div>
         {% endfor %}
         <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #767676;">
-            <span>Subtotal</span>
-            <span>Rs. {{ "{:,.2f}".format(total) }}</span>
+            <span>Product Price</span>
+            <span>Rs. {{ "{:,.2f}".format(totals.product_price) }}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #767676;">
-            <span>Platform Fee (10%)</span>
-            <span>Rs. {{ "{:,.2f}".format(commission) }}</span>
+            <span>Delivery Charges</span>
+            <span>Rs. {{ "{:,.2f}".format(totals.delivery_charges) }}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 14px 0; font-size: 18px; font-weight: 800;">
             <span>Total</span>
-            <span>Rs. {{ "{:,.2f}".format(total) }}</span>
+            <span>Rs. {{ "{:,.2f}".format(totals.total_buyer_pays) }}</span>
         </div>
         <p style="font-size: 12px; color: #767676; margin: 12px 0 0 0; line-height: 1.5;">
-            Payment is handled directly between you and the seller or via bank transfer. We never store card details.
+            Platform commission (10%) is deducted from the seller's payout, not added to your bill.
         </p>
     </div>
 </div>

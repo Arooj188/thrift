@@ -115,6 +115,7 @@
             <h3>Account</h3>
             <a href="/">Hello, {{ session.user_name }}</a>
             <a href="/seller/listings">My Listings</a>
+            <a href="/seller/orders">Seller Orders</a>
             <a href="/orders">Track Orders</a>
             <a href="/cart">Cart ({% if session.cart %}{{ session.cart|length }}{% else %}0{% endif %})</a>
             <a href="/logout">Logout</a>
@@ -158,6 +159,7 @@
             <a href="/cart">Cart ({% if session.cart %}{{ session.cart|length }}{% else %}0{% endif %})</a>
             {% if session.user_id %}
                 <a href="/seller/listings">My Listings</a>
+                <a href="/seller/orders">Seller Orders</a>
             {% endif %}
             <a href="/sell" class="btn-sell">List Item for Sale</a>
         </div>

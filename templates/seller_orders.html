@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .seller-order-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+    }
+    .seller-order-thumb {
+        width: 90px;
+        height: 90px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: #f2efea;
+        flex-shrink: 0;
+    }
+    .seller-order-details {
+        flex: 1;
+        min-width: 0;
+    }
+    .seller-order-meta {
+        font-size: 13px;
+        color: #767676;
+        margin-top: 4px;
+    }
+    .seller-order-price {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+    .earnings-breakdown {
+        background: #fbf9f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 12px;
+    }
+    .earnings-breakdown div {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 13px;
+    }
+    .earnings-breakdown .total {
+        border-top: 1px solid #e5e7eb;
+        margin-top: 6px;
+        padding-top: 10px;
+        font-weight: 800;
+        font-size: 15px;
+        color: #1c1c1c;
+    }
+    .update-form {
+        margin-top: 16px;
+        padding: 16px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+    }
+    .update-form select, .update-form input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #dcd7ce;
+        border-radius: 6px;
+        background: #fbf9f6;
+        font-size: 14px;
+        margin-bottom: 10px;
+    }
+    .btn-sm {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 8px;
+        background: #1c1c1c;
+        color: #fbf9f6;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .btn-sm:hover {
+        background: #333333;
+    }
+</style>
+<div class="form-box" style="max-width: 900px; margin-bottom: 40px;">
+    <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 10px;">Seller Orders</h1>
+    <p style="font-size: 14px; color: #767676; margin-bottom: 24px;">Manage your sales, add tracking info, and view earnings.</p>
+</div>
+
+{% if not orders %}
+<p style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb; color: #767676; font-size: 14px;">No sales yet. List items to start earning.</p>
+{% else %}
+    {% for order in orders %}
+    <div class="seller-order-card">
+        {% if order.product_title %}
+        <img src="{{ build_image_url(order.image_url or order.images) if has_product_image(order.image_url, order.images) else '/static/placeholder.svg' }}" alt="{{ order.product_title }}" class="seller-order-thumb">
+        {% endif %}
+        <div class="seller-order-details">
+            <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700;">{{ order.product_title }}</h3>
+            <p class="seller-order-meta">Buyer: {{ order.buyer_name }} | {{ order.order_date }}</p>
+            <div class="seller-order-price">Rs. {{ "{:,.2f}".format(order.asking_price or 0) }}</div>
+            <span class="order-badge">{{ order.status or 'Order Placed' }}</span>
+
+            <div class="earnings-breakdown">
+                <div><span>Product Price</span><span>Rs. {{ "{:,.2f}".format(order.asking_price or 0) }}</span></div>
+                <div><span>Platform Commission (10%)</span><span>Rs. {{ "{:,.2f}".format(order.platform_commission or 0) }}</span></div>
+                <div class="total"><span>You Receive</span><span>Rs. {{ "{:,.2f}".format(order.seller_amount or 0) }}</span></div>
+            </div>
+
+            {% if order.progress and not order.progress.is_cancelled %}
+            <div class="progress-tracker" style="margin-top: 20px;">
+                {% for step in order.progress.steps %}
+                <div class="progress-step {% if loop.index <= order.progress.current_index + 1 %}completed{% endif %} {% if loop.index == order.progress.current_index + 1 %}active{% endif %}">
+                    <div class="progress-dot">{{ loop.index }}</div>
+                    <div class="progress-label">{{ step }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% elif order.progress and order.progress.is_cancelled %}
+            <div class="cancelled-notice" style="margin-top: 12px;">This order has been cancelled.</div>
+            {% endif %}
+
+            <form action="/seller/order/{{ order.order_id }}/update" method="POST" class="update-form">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label style="font-size: 12px; font-weight: 700; color: #767676; display: block; margin-bottom: 4px;">Status</label>
+                        <select name="status">
+                            {% for s in ['Order Placed', 'Preparing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'] %}
+                            <option value="{{ s }}" {% if order.status == s %}selected{% endif %}>{{ s }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; font-weight: 700; color: #767676; display: block; margin-bottom: 4px;">Courier Company</label>
+                        <select name="courier_company">
+                            <option value="">Select courier</option>
+                            {% for c in ['TCS', 'Leopards', 'M&P Courier'] %}
+                            <option value="{{ c }}" {% if order.shipping_company == c %}selected{% endif %}>{{ c }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 12px; font-weight: 700; color: #767676; display: block; margin-bottom: 4px;">Tracking Number</label>
+                    <input type="text" name="tracking_number" value="{{ order.tracking_number or '' }}" placeholder="Enter tracking number">
+                </div>
+                <button type="submit" class="btn-sm" style="margin-top: 10px;">Update Order</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% endif %}
+{% endblock %}

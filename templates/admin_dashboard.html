@@ -211,9 +211,10 @@
                 <td>
                   <form action="/admin/order/{{ order.order_id }}/update" method="POST" style="display: inline;">
                     <select name="status" onchange="this.form.submit()" style="padding: 6px; border-radius: 6px; border: 1px solid #e5e7eb;">
-                      <option value="Pending" {% if order.status == 'Pending' %}selected{% endif %}>Pending</option>
-                      <option value="Paid" {% if order.status == 'Paid' %}selected{% endif %}>Paid</option>
+                      <option value="Order Placed" {% if order.status == 'Order Placed' %}selected{% endif %}>Order Placed</option>
+                      <option value="Preparing" {% if order.status == 'Preparing' %}selected{% endif %}>Preparing</option>
                       <option value="Shipped" {% if order.status == 'Shipped' %}selected{% endif %}>Shipped</option>
+                      <option value="Out for Delivery" {% if order.status == 'Out for Delivery' %}selected{% endif %}>Out for Delivery</option>
                       <option value="Delivered" {% if order.status == 'Delivered' %}selected{% endif %}>Delivered</option>
                       <option value="Cancelled" {% if order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
                     </select>

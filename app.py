@@ -50,6 +50,12 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 DATABASE_URL = os.environ.get('DATABASE_URL')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 
+PLATFORM_COMMISSION_RATE = 0.10
+DELIVERY_CHARGES = 0.00
+SUPPORTED_PAYMENT_METHODS = ['Online Payment', 'Bank Transfer']
+COURIER_OPTIONS = ['TCS', 'Leopards', 'M&P Courier']
+ORDER_STATUSES = ['Order Placed', 'Preparing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled']
+
 def dict_factory(cursor, row):
     return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
 
@@ -123,7 +129,6 @@ def get_db_connection():
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
         conn = psycopg2.connect(url)
-        conn.row_factory = dict_factory
         return conn
     else:
         conn = sqlite3.connect('database.db')
@@ -337,6 +342,8 @@ def ensure_schema():
         ("payout_date", "TEXT"),
         ("payment_date", "TEXT"),
         ("shipping_company", "TEXT"),
+        ("delivery_charges", "REAL DEFAULT 0"),
+        ("payment_method", "TEXT DEFAULT ''"),
     ]
     if schema_has_column(conn, 'orders', 'order_id'):
         for column_name, definition in order_columns:
@@ -355,6 +362,24 @@ def ensure_schema():
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_seller_id ON orders(seller_id)')
         except sqlite3.OperationalError:
             pass
+
+    try:
+        id_autoincrement = "SERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS messages (
+                message_id {id_autoincrement},
+                sender_id INTEGER NOT NULL,
+                receiver_id INTEGER NOT NULL,
+                order_id INTEGER,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sender_id) REFERENCES users(user_id),
+                FOREIGN KEY (receiver_id) REFERENCES users(user_id),
+                FOREIGN KEY (order_id) REFERENCES orders(order_id)
+            )
+        ''')
+    except Exception:
+        pass
 
     conn.commit()
     conn.close()
@@ -398,6 +423,28 @@ def sanitize_input(s: str, max_len: int = 1024) -> str:
     s = s.strip()
     return s[:max_len]
 
+def calculate_order_totals(amount):
+    commission = round(amount * PLATFORM_COMMISSION_RATE, 2)
+    seller_earnings = round(amount - commission, 2)
+    total_buyer_pays = round(amount + DELIVERY_CHARGES, 2)
+    return {
+        'product_price': round(amount, 2),
+        'delivery_charges': DELIVERY_CHARGES,
+        'total_buyer_pays': total_buyer_pays,
+        'platform_commission': commission,
+        'seller_earnings': seller_earnings,
+    }
+
+def get_status_progress(current_status):
+    if current_status == 'Cancelled':
+        return {'steps': ORDER_STATUSES[:-1], 'current_index': -1, 'is_cancelled': True}
+    status_order = ORDER_STATUSES[:-1]
+    try:
+        current_index = status_order.index(current_status)
+        return {'steps': status_order, 'current_index': current_index, 'is_cancelled': False}
+    except ValueError:
+        return None
+
 def get_cart_products():
     cart_ids = get_clean_cart_ids()
     if not cart_ids:
@@ -412,6 +459,14 @@ def get_cart_products():
     else:
         products = cursor.fetchall()
     conn.close()
+    
+    # Remove stale product IDs from session cart
+    valid_ids = {p['id'] for p in products}
+    current_cart = get_clean_cart_ids()
+    new_cart = [pid for pid in current_cart if pid in valid_ids]
+    if len(new_cart) != len(current_cart):
+        session['cart'] = new_cart
+    
     return products
 
 
@@ -641,6 +696,11 @@ def product_details(product_id):
 
 @app.route('/cart/add/<int:product_id>', methods=['POST'])
 def add_to_cart(product_id):
+    product = get_product_by_id(product_id)
+    if not product or product.get('status') != 'available':
+        flash('This item is no longer available.')
+        return redirect(url_for('index'))
+    
     cart_ids = get_clean_cart_ids()
     if product_id not in cart_ids:
         cart_ids.append(product_id)
@@ -677,9 +737,23 @@ def checkout():
         return redirect(url_for('index'))
 
     total = sum(p['asking_price'] for p in products)
-    commission = round(total * 0.10, 2)
-    final_payout = round(total - commission, 2)
-    return render_template('checkout.html', products=products, total=total, commission=commission, final_payout=final_payout)
+    totals = calculate_order_totals(total)
+
+    user = None
+    if 'user_id' in session:
+        conn_user = get_db_connection()
+        cur_user = conn_user.cursor()
+        if DATABASE_URL:
+            cur_user.execute('SELECT name, email, phone, street_address, city, province, postal_code FROM users WHERE user_id = %s', (session['user_id'],))
+            row = cur_user.fetchone()
+            user = dict(zip([d[0] for d in cur_user.description], row)) if row else None
+        else:
+            row = cur_user.execute('SELECT name, email, phone, street_address, city, province, postal_code FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+            user = dict(row) if row else None
+        conn_user.close()
+
+    return render_template('checkout.html', products=products, totals=totals, user=user)
+
 
 @app.route('/place_order', methods=['POST'])
 def place_order():
@@ -700,7 +774,10 @@ def place_order():
         flash('Please complete all required shipping and payment fields before placing your order.')
         return redirect(url_for('checkout'))
 
-    # Determine buyer email from form or user record
+    if payment_method not in SUPPORTED_PAYMENT_METHODS:
+        flash('Invalid payment method selected.')
+        return redirect(url_for('checkout'))
+
     buyer_email = request.form.get('buyer_email', '').strip()
     if not buyer_email:
         conn_temp = get_db_connection()
@@ -728,27 +805,22 @@ def place_order():
 
         seller_id = product['seller_id']
         amount = float(product['asking_price'])
-        order_total = round(amount, 2)
-        seller_amount = round(amount * 0.90, 2)
-        platform_commission = round(amount * 0.10, 2)
+        totals = calculate_order_totals(amount)
         tracking_num = f"TRK{product['id']}{int(datetime.utcnow().timestamp())}PK"
-
-        # Build a consolidated delivery note to store shipping_company and payment_method
-        full_delivery_note = f"{shipping_company} | {payment_method}"
-        if delivery_note:
-            full_delivery_note = f"{full_delivery_note} | {delivery_note}"
 
         if DATABASE_URL:
             cursor.execute('''
                 INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
                     buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
-                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date,
+                    delivery_charges, payment_method, shipping_company)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING order_id
             ''', (
-                product['id'], buyer_id, seller_id, 'Paid', buyer_name, buyer_email, buyer_phone,
-                street, city, '', '', full_delivery_note,
-                    tracking_num, seller_amount, platform_commission, order_total, 'Pending', None, datetime.utcnow(),
+                product['id'], buyer_id, seller_id, 'Order Placed', buyer_name, buyer_email, buyer_phone,
+                street, city, '', '', delivery_note,
+                    tracking_num, totals['seller_earnings'], totals['platform_commission'], totals['total_buyer_pays'], 'Pending', None, datetime.utcnow(),
+                    totals['delivery_charges'], payment_method, shipping_company,
             ))
             order_id = cursor.fetchone()[0]
             cursor.execute('UPDATE Products SET status=%s, tracking_number=%s, order_id=%s WHERE id=%s',
@@ -757,24 +829,21 @@ def place_order():
             cursor.execute('''
                 INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
                     buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
-                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date,
+                    delivery_charges, payment_method, shipping_company)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                product['id'], buyer_id, seller_id, 'Paid', buyer_name, buyer_email, buyer_phone,
-                street, city, '', '', full_delivery_note, tracking_num,
-                seller_amount, platform_commission, order_total, 'Pending', None, datetime.utcnow(),
+                product['id'], buyer_id, seller_id, 'Order Placed', buyer_name, buyer_email, buyer_phone,
+                street, city, '', '', delivery_note, tracking_num,
+                totals['seller_earnings'], totals['platform_commission'], totals['total_buyer_pays'], 'Pending', None, datetime.utcnow(),
+                totals['delivery_charges'], payment_method, shipping_company,
             ))
             order_id = cursor.lastrowid
             cursor.execute('UPDATE Products SET status=?, tracking_number=?, order_id=? WHERE id=?',
                            ('sold', tracking_num, order_id, product['id']))
 
-        # Append shipping company and payment method to delivery note for record keeping
-        full_delivery_note = f"{shipping_company} | {payment_method}"
-        if delivery_note:
-            full_delivery_note = f"{full_delivery_note} | {delivery_note}"
-        
-        send_buyer_email(buyer_email, buyer_name, product['title'], product['asking_price'], tracking_num, f"{street}, {city} | {full_delivery_note}", payment_method)
-        
+        send_buyer_email(buyer_email, buyer_name, product['title'], totals['total_buyer_pays'], tracking_num, f"{street}, {city}", payment_method)
+
         seller_info = None
         conn_temp2 = get_db_connection()
         cur_temp2 = conn_temp2.cursor()
@@ -786,7 +855,7 @@ def place_order():
             row = cur_temp2.execute('SELECT name, email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
             seller_info = dict(row) if row else None
         conn_temp2.close()
-        
+
         if seller_info:
             send_seller_email(
                 seller_info['email'],
@@ -794,7 +863,7 @@ def place_order():
                 product['title'],
                 buyer_name,
                 buyer_phone,
-                f"{street}, {city} | {full_delivery_note}",
+                f"{street}, {city} | {delivery_note or 'No special instructions'}",
                 tracking_num
             )
 
@@ -934,6 +1003,14 @@ def delete_listing(product_id):
         cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
     conn.commit()
     conn.close()
+    
+    # Remove from any active session cart to prevent stale references
+    if 'cart' in session:
+        current_cart = list(session['cart'])
+        if product_id in current_cart:
+            current_cart.remove(product_id)
+            session['cart'] = current_cart
+    
     flash('Listing deleted successfully.')
     return redirect(url_for('seller_listings'))
 
@@ -987,7 +1064,12 @@ def track_orders():
         ''', (session['user_id'],))
         orders = [dict(row) for row in cursor.fetchall()]
     conn.close()
+
+    for order in orders:
+        order['progress'] = get_status_progress(order.get('status', ''))
+
     return render_template('orders.html', orders=orders)
+
 
 @app.route('/admin')
 def admin_dashboard():
@@ -1085,6 +1167,155 @@ def admin_listings():
 @app.route('/admin/orders')
 def admin_orders():
     return redirect(url_for('admin_dashboard', section='orders'))
+
+
+@app.route('/seller/orders')
+def seller_orders():
+    if 'user_id' not in session:
+        flash('Please log in to view your seller orders.')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if DATABASE_URL:
+        cursor.execute('''
+            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+                p.image_url, p.images, p.asking_price
+            FROM orders o
+            JOIN Products p ON o.product_id = p.id
+            WHERE o.seller_id = %s
+            ORDER BY o.order_date DESC
+        ''', (session['user_id'],))
+        columns = [desc[0] for desc in cursor.description]
+        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    else:
+        cursor.execute('''
+            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+                p.image_url, p.images, p.asking_price
+            FROM orders o
+            JOIN Products p ON o.product_id = p.id
+            WHERE o.seller_id = ?
+            ORDER BY o.order_date DESC
+        ''', (session['user_id'],))
+        orders = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    for order in orders:
+        order['progress'] = get_status_progress(order.get('status', ''))
+        if not order.get('platform_commission') and order.get('asking_price'):
+            totals = calculate_order_totals(float(order['asking_price']))
+            order['platform_commission'] = totals['platform_commission']
+            order['seller_amount'] = totals['seller_earnings']
+            order['order_total'] = totals['total_buyer_pays']
+
+    return render_template('seller_orders.html', orders=orders)
+
+
+@app.route('/order/<int:order_id>')
+def order_detail(order_id):
+    if 'user_id' not in session:
+        flash('Please log in to view order details.')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if DATABASE_URL:
+        cursor.execute('''
+            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+                p.image_url, p.images, p.asking_price, p.seller_id
+            FROM orders o
+            JOIN Products p ON o.product_id = p.id
+            WHERE o.order_id = %s
+        ''', (order_id,))
+        columns = [desc[0] for desc in cursor.description]
+        order = cursor.fetchone()
+        order = dict(zip(columns, order)) if order else None
+    else:
+        order = cursor.execute('''
+            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+                p.image_url, p.images, p.asking_price, p.seller_id
+            FROM orders o
+            JOIN Products p ON o.product_id = p.id
+            WHERE o.order_id = ?
+        ''', (order_id,)).fetchone()
+        order = dict(order) if order else None
+    conn.close()
+
+    if not order:
+        flash('Order not found.')
+        return redirect(url_for('index'))
+
+    is_buyer = order['buyer_id'] == session['user_id']
+    is_seller = order['seller_id'] == session['user_id']
+    if not is_buyer and not is_seller:
+        flash('You do not have access to this order.')
+        return redirect(url_for('index'))
+
+    order['progress'] = get_status_progress(order.get('status', ''))
+    if not order.get('platform_commission') and order.get('asking_price'):
+        totals = calculate_order_totals(float(order['asking_price']))
+        order['platform_commission'] = totals['platform_commission']
+        order['seller_amount'] = totals['seller_earnings']
+        order['order_total'] = totals['total_buyer_pays']
+
+    return render_template('order_detail.html', order=order, is_buyer=is_buyer, is_seller=is_seller)
+
+
+@app.route('/seller/order/<int:order_id>/update', methods=['POST'])
+def seller_update_order(order_id):
+    if 'user_id' not in session:
+        flash('Please log in to update orders.')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if DATABASE_URL:
+        cursor.execute('SELECT seller_id FROM orders WHERE order_id = %s', (order_id,))
+        row = cursor.fetchone()
+        order = dict(zip([d[0] for d in cursor.description], row)) if row else None
+    else:
+        order = cursor.execute('SELECT seller_id FROM orders WHERE order_id = ?', (order_id,)).fetchone()
+        order = dict(order) if order else None
+
+    if not order or order['seller_id'] != session['user_id']:
+        flash('You can only update your own orders.')
+        return redirect(url_for('seller_orders'))
+
+    new_status = sanitize_input(request.form.get('status', ''))
+    courier_company = sanitize_input(request.form.get('courier_company', ''))
+    tracking_number = sanitize_input(request.form.get('tracking_number', ''))
+
+    if new_status and new_status in ORDER_STATUSES:
+        if DATABASE_URL:
+            cursor.execute('UPDATE orders SET status = %s WHERE order_id = %s', (new_status, order_id))
+        else:
+            cursor.execute('UPDATE orders SET status = ? WHERE order_id = ?', (new_status, order_id))
+
+    if courier_company in COURIER_OPTIONS:
+        if DATABASE_URL:
+            cursor.execute('UPDATE orders SET shipping_company = %s WHERE order_id = %s', (courier_company, order_id))
+        else:
+            cursor.execute('UPDATE orders SET shipping_company = ? WHERE order_id = ?', (courier_company, order_id))
+
+    if tracking_number:
+        if DATABASE_URL:
+            cursor.execute('UPDATE orders SET tracking_number = %s WHERE order_id = %s', (tracking_number, order_id))
+        else:
+            cursor.execute('UPDATE orders SET tracking_number = ? WHERE order_id = ?', (tracking_number, order_id))
+
+    conn.commit()
+    conn.close()
+    flash('Order updated successfully.')
+    return redirect(url_for('seller_orders'))
+
+
+@app.route('/messages')
+def messages_page():
+    if 'user_id' not in session:
+        flash('Please log in to view messages.')
+        return redirect(url_for('login'))
+    return render_template('messages.html')
+
 
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
@@ -1196,8 +1427,8 @@ def admin_update_order(order_id):
         flash('Admin access required.')
         return redirect(url_for('index'))
     new_status = sanitize_input(request.form.get('status', ''))
-    if not new_status:
-        flash('No status provided.')
+    if not new_status or new_status not in ORDER_STATUSES:
+        flash('No valid status provided.')
         return redirect(url_for('admin_dashboard', section='orders'))
     conn = get_db_connection()
     cursor = conn.cursor()

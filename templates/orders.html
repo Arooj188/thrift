@@ -28,11 +28,6 @@
         color: #767676;
         margin-top: 4px;
     }
-    .order-status {
-        font-size: 13px;
-        color: #2563eb;
-        margin-top: 6px;
-    }
     .order-price {
         font-size: 18px;
         font-weight: 800;
@@ -52,6 +47,85 @@
         font-size: 13px;
         color: #767676;
     }
+    .progress-tracker {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 20px 0;
+        position: relative;
+    }
+    .progress-tracker::before {
+        content: '';
+        position: absolute;
+        top: 15px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #e5e7eb;
+        z-index: 0;
+    }
+    .progress-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        z-index: 1;
+        flex: 1;
+    }
+    .progress-dot {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: #767676;
+        transition: background 0.3s ease, color 0.3s ease;
+    }
+    .progress-step.completed .progress-dot {
+        background: #1c1c1c;
+        color: #fbf9f6;
+    }
+    .progress-step.active .progress-dot {
+        background: #1c1c1c;
+        color: #fbf9f6;
+        box-shadow: 0 0 0 4px rgba(28, 28, 28, 0.15);
+    }
+    .progress-label {
+        font-size: 11px;
+        color: #767676;
+        margin-top: 8px;
+        text-align: center;
+        font-weight: 600;
+    }
+    .progress-step.completed .progress-label,
+    .progress-step.active .progress-label {
+        color: #1c1c1c;
+    }
+    .tracking-info {
+        margin-top: 16px;
+        padding: 16px;
+        background: #fbf9f6;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+    }
+    .tracking-info div {
+        margin-bottom: 6px;
+        font-size: 13px;
+    }
+    .cancelled-notice {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        margin-top: 12px;
+    }
 </style>
 <div class="form-box" style="max-width: 650px; margin-bottom: 40px;">
     <h1 style="font-size: 32px; font-weight: 800; margin: 0 0 10px 0;">Your Orders</h1>
@@ -69,14 +143,37 @@
         <div class="order-details">
             <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700;">{{ order.product_title }}</h3>
             <p class="order-meta">Brand: {{ order.brand }} | Size: {{ order.size }} | Color: {{ order.color }}</p>
-            <p class="order-status"><strong>Order Status:</strong> {{ order.status }}</p>
-            <p class="order-status"><strong>Tracking Code:</strong> {{ order.tracking_number }}</p>
-            <div class="order-price">Rs. {{ "{:,.2f}".format(order.order_total or order.seller_amount + order.platform_commission or 0) }}</div>
-            <span class="order-badge">{{ order.status }}</span>
+            <div class="order-price">Rs. {{ "{:,.2f}".format(order.order_total or order.asking_price or 0) }}</div>
+            <span class="order-badge">{{ order.status or 'Order Placed' }}</span>
+
+            {% if order.progress and not order.progress.is_cancelled %}
+            <div class="progress-tracker">
+                {% for step in order.progress.steps %}
+                <div class="progress-step {% if loop.index <= order.progress.current_index + 1 %}completed{% endif %} {% if loop.index == order.progress.current_index + 1 %}active{% endif %}">
+                    <div class="progress-dot">{{ loop.index }}</div>
+                    <div class="progress-label">{{ step }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% elif order.progress and order.progress.is_cancelled %}
+            <div class="cancelled-notice">This order has been cancelled.</div>
+            {% endif %}
+
+            {% if order.tracking_number or order.shipping_company %}
+            <div class="tracking-info">
+                {% if order.shipping_company %}
+                <div><strong>Courier:</strong> {{ order.shipping_company }}</div>
+                {% endif %}
+                {% if order.tracking_number %}
+                <div><strong>Tracking Number:</strong> {{ order.tracking_number }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div class="order-address">
                 <div><strong>Delivery Address:</strong> {{ order.buyer_street_address }}, {{ order.buyer_city }}, {{ order.buyer_province }}, {{ order.buyer_postal_code }}</div>
                 {% if order.delivery_note %}
-                <div><strong>Courier Note:</strong> {{ order.delivery_note }}</div>
+                <div><strong>Delivery Note:</strong> {{ order.delivery_note }}</div>
                 {% endif %}
             </div>
         </div>
