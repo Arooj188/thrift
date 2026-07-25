@@ -1135,8 +1135,12 @@ def admin_delete_user(user_id):
             flash('Cannot delete the final remaining administrator.')
             return redirect(url_for('admin_dashboard', section='users'))
 
-        cursor.execute('UPDATE Products SET seller_id = NULL WHERE seller_id = ?', (user_id,))
-        cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
+        if DATABASE_URL:
+            cursor.execute('UPDATE Products SET seller_id = NULL WHERE seller_id = %s', (user_id,))
+            cursor.execute('DELETE FROM users WHERE user_id = %s', (user_id,))
+        else:
+            cursor.execute('UPDATE Products SET seller_id = NULL WHERE seller_id = ?', (user_id,))
+            cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
         conn.commit()
         flash('User removed.')
     except Exception as e:
