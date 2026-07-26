@@ -47,7 +47,6 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 
 PLATFORM_COMMISSION_RATE = 0.10
@@ -118,51 +117,25 @@ app.jinja_env.globals['has_product_image'] = has_product_image
 
 
 def get_db_connection():
-    if DATABASE_URL:
-        import importlib
-        try:
-            psycopg2 = importlib.import_module('psycopg2')
-        except ImportError:
-            raise RuntimeError('psycopg2 is required when DATABASE_URL is configured')
-        # Fix for Render/Neon connection strings that start with postgres://
-        url = DATABASE_URL
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql://", 1)
-        conn = psycopg2.connect(url)
-        return conn
-    else:
-        conn = sqlite3.connect('database.db')
-        conn.row_factory = dict_factory
-        return conn
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = dict_factory
+    return conn
 
 def schema_has_column(conn, table_name, column_name):
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute(f"""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name='{table_name.lower()}' AND column_name='{column_name.lower()}'
-        """)
-        return cursor.fetchone() is not None
-    else:
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        rows = cursor.fetchall()
-        if not rows:
-            return False
-        if isinstance(rows[0], dict):
-            return any(row.get('name') == column_name for row in rows)
-        return any(row[1] == column_name for row in rows)
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    rows = cursor.fetchall()
+    if not rows:
+        return False
+    return any(row.get('name') == column_name for row in rows)
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Check if we are using PostgreSQL or SQLite to apply the correct Autoincrement keyword
-    id_autoincrement = "SERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
-    
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS users (
-            user_id {id_autoincrement},
+            user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             username TEXT,
             email TEXT UNIQUE NOT NULL,
@@ -184,7 +157,7 @@ def init_db():
     ''')
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS Products (
-            id {id_autoincrement},
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             brand TEXT,
             category TEXT,
@@ -212,7 +185,7 @@ def init_db():
     ''')
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS orders (
-            order_id {id_autoincrement},
+            order_id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL,
             buyer_id INTEGER NOT NULL,
             seller_id INTEGER NOT NULL,
@@ -236,10 +209,9 @@ def init_db():
             FOREIGN KEY (seller_id) REFERENCES users (user_id)
         )
     ''')
-    # Questions & Answers tables
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS questions (
-            question_id {0},
+            question_id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             content TEXT NOT NULL,
@@ -247,10 +219,10 @@ def init_db():
             FOREIGN KEY (product_id) REFERENCES Products(id),
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
-    '''.format("SERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"))
+    ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS answers (
-            answer_id {0},
+            answer_id INTEGER PRIMARY KEY AUTOINCREMENT,
             question_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             content TEXT NOT NULL,
@@ -258,25 +230,24 @@ def init_db():
             FOREIGN KEY (question_id) REFERENCES questions(question_id),
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
-    '''.format("SERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"))
+    ''')
     
-    if not DATABASE_URL:
-        try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_seller_id ON Products(seller_id)')
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_buyer_id ON orders(buyer_id)')
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_seller_id ON orders(seller_id)')
-        except sqlite3.OperationalError:
-            pass
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_seller_id ON Products(seller_id)')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_buyer_id ON orders(buyer_id)')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_seller_id ON orders(seller_id)')
+    except sqlite3.OperationalError:
+        pass
     
     conn.commit()
     conn.close()
@@ -353,21 +324,19 @@ def ensure_schema():
                 except Exception:
                     pass
 
-    if not DATABASE_URL:
-        try:
-            if schema_has_column(conn, 'users', 'username'):
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_seller_id ON Products(seller_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_buyer_id ON orders(buyer_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_seller_id ON orders(seller_id)')
-        except sqlite3.OperationalError:
-            pass
+    try:
+        if schema_has_column(conn, 'users', 'username'):
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_products_seller_id ON Products(seller_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_buyer_id ON orders(buyer_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_orders_seller_id ON orders(seller_id)')
+    except sqlite3.OperationalError:
+        pass
 
     try:
-        id_autoincrement = "SERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
         cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS messages (
-                message_id {id_autoincrement},
+                message_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER NOT NULL,
                 receiver_id INTEGER NOT NULL,
                 order_id INTEGER,
@@ -451,13 +420,9 @@ def get_cart_products():
         return []
     conn = get_db_connection()
     cursor = conn.cursor()
-    placeholders = ','.join('%s' if DATABASE_URL else '?' for _ in cart_ids)
+    placeholders = ','.join('?' for _ in cart_ids)
     cursor.execute(f"SELECT * FROM Products WHERE id IN ({placeholders}) AND status = 'available'", cart_ids)
-    if DATABASE_URL:
-        columns = [desc[0] for desc in cursor.description]
-        products = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        products = cursor.fetchall()
+    products = cursor.fetchall()
     conn.close()
     
     # Remove stale product IDs from session cart
@@ -499,12 +464,7 @@ def save_uploaded_images(files):
 def get_product_by_id(product_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute("SELECT * FROM Products WHERE id = %s", (product_id,))
-        row = cursor.fetchone()
-        product = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
-    else:
-        product = cursor.execute("SELECT * FROM Products WHERE id = ?", (product_id,)).fetchone()
+    product = cursor.execute("SELECT * FROM Products WHERE id = ?", (product_id,)).fetchone()
     conn.close()
     return product
 
@@ -514,12 +474,7 @@ def is_admin_user():
         return False
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('SELECT is_admin, email FROM users WHERE user_id = %s', (session['user_id'],))
-        row = cursor.fetchone()
-        user = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
-    else:
-        user = cursor.execute('SELECT * FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+    user = cursor.execute('SELECT * FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
     conn.close()
     admin_email = os.environ.get('ADMIN_EMAIL')
     if not user:
@@ -627,18 +582,11 @@ def index():
     conn = get_db_connection()
     cursor = conn.cursor()
     if category:
-        if DATABASE_URL:
-            cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = %s", (category,))
-        else:
-            cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
+        cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
     else:
         cursor.execute("SELECT * FROM Products WHERE status = 'available'")
     
-    if DATABASE_URL:
-        columns = [desc[0] for desc in cursor.description]
-        products = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        products = cursor.fetchall()
+    products = cursor.fetchall()
     conn.close()
     return render_template('index.html', products=products, selected_category=category)
 
@@ -650,12 +598,7 @@ def how_it_works():
 def product_details(product_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute("SELECT * FROM Products WHERE id = %s", (product_id,))
-        row = cursor.fetchone()
-        product = dict(zip([desc[0] for desc in cursor.description], row)) if row else None
-    else:
-        product = cursor.execute("SELECT * FROM Products WHERE id = ?", (product_id,)).fetchone()
+    product = cursor.execute("SELECT * FROM Products WHERE id = ?", (product_id,)).fetchone()
     conn.close()
     if not product:
         flash("Product not found!")
@@ -671,26 +614,11 @@ def product_details(product_id):
     # Load public questions and answers
     conn = get_db_connection()
     cur = conn.cursor()
-    if DATABASE_URL:
-        cur.execute('''
-            SELECT q.question_id, q.content, q.created_at, u.name as asker
-            FROM questions q
-            LEFT JOIN users u ON q.user_id = u.user_id
-            WHERE q.product_id = %s
-            ORDER BY q.created_at ASC
-        ''', (product_id,))
-        qcols = [desc[0] for desc in cur.description]
-        questions = [dict(zip(qcols, row)) for row in cur.fetchall()]
-        for q in questions:
-            cur.execute('SELECT a.answer_id, a.content, a.created_at, u.name as answerer FROM answers a LEFT JOIN users u ON a.user_id = u.user_id WHERE a.question_id = %s ORDER BY a.created_at ASC', (q['question_id'],))
-            acol = [d[0] for d in cur.description]
-            q['answers'] = [dict(zip(acol, r)) for r in cur.fetchall()]
-    else:
-        rows = cur.execute('SELECT q.question_id, q.content, q.created_at, u.name as asker FROM questions q LEFT JOIN users u ON q.user_id = u.user_id WHERE q.product_id = ? ORDER BY q.created_at ASC', (product_id,)).fetchall()
-        questions = [dict(r) for r in rows]
-        for q in questions:
-            qrows = cur.execute('SELECT a.answer_id, a.content, a.created_at, u.name as answerer FROM answers a LEFT JOIN users u ON a.user_id = u.user_id WHERE a.question_id = ? ORDER BY a.created_at ASC', (q['question_id'],)).fetchall()
-            q['answers'] = [dict(ar) for ar in qrows]
+    rows = cur.execute('SELECT q.question_id, q.content, q.created_at, u.name as asker FROM questions q LEFT JOIN users u ON q.user_id = u.user_id WHERE q.product_id = ? ORDER BY q.created_at ASC', (product_id,)).fetchall()
+    questions = [dict(r) for r in rows]
+    for q in questions:
+        qrows = cur.execute('SELECT a.answer_id, a.content, a.created_at, u.name as answerer FROM answers a LEFT JOIN users u ON a.user_id = u.user_id WHERE a.question_id = ? ORDER BY a.created_at ASC', (q['question_id'],)).fetchall()
+        q['answers'] = [dict(ar) for ar in qrows]
     conn.close()
     return render_template('product_details.html', product=product, image_list=image_list, questions=questions)
 
@@ -743,13 +671,8 @@ def checkout():
     if 'user_id' in session:
         conn_user = get_db_connection()
         cur_user = conn_user.cursor()
-        if DATABASE_URL:
-            cur_user.execute('SELECT name, email, phone, street_address, city, province, postal_code FROM users WHERE user_id = %s', (session['user_id'],))
-            row = cur_user.fetchone()
-            user = dict(zip([d[0] for d in cur_user.description], row)) if row else None
-        else:
-            row = cur_user.execute('SELECT name, email, phone, street_address, city, province, postal_code FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-            user = dict(row) if row else None
+        row = cur_user.execute('SELECT name, email, phone, street_address, city, province, postal_code FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+        user = dict(row) if row else None
         conn_user.close()
 
     return render_template('checkout.html', products=products, totals=totals, user=user)
@@ -782,13 +705,8 @@ def place_order():
     if not buyer_email:
         conn_temp = get_db_connection()
         cur_temp = conn_temp.cursor()
-        if DATABASE_URL:
-            cur_temp.execute('SELECT email FROM users WHERE user_id = %s', (session['user_id'],))
-            row = cur_temp.fetchone()
-            buyer_email = row[0] if row else ''
-        else:
-            row = cur_temp.execute('SELECT email FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-            buyer_email = row.get('email') if row else ''
+        row = cur_temp.execute('SELECT email FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+        buyer_email = row.get('email') if row else ''
         conn_temp.close()
 
     products = get_cart_products()
@@ -808,52 +726,29 @@ def place_order():
         totals = calculate_order_totals(amount)
         tracking_num = f"TRK{product['id']}{int(datetime.utcnow().timestamp())}PK"
 
-        if DATABASE_URL:
-            cursor.execute('''
-                INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
-                    buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
-                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date,
-                    delivery_charges, payment_method, shipping_company)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING order_id
-            ''', (
-                product['id'], buyer_id, seller_id, 'Order Placed', buyer_name, buyer_email, buyer_phone,
-                street, city, '', '', delivery_note,
-                    tracking_num, totals['seller_earnings'], totals['platform_commission'], totals['total_buyer_pays'], 'Pending', None, datetime.utcnow(),
-                    totals['delivery_charges'], payment_method, shipping_company,
-            ))
-            order_id = cursor.fetchone()[0]
-            cursor.execute('UPDATE Products SET status=%s, tracking_number=%s, order_id=%s WHERE id=%s',
-                           ('sold', tracking_num, order_id, product['id']))
-        else:
-            cursor.execute('''
-                INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
-                    buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
-                    seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date,
-                    delivery_charges, payment_method, shipping_company)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                product['id'], buyer_id, seller_id, 'Order Placed', buyer_name, buyer_email, buyer_phone,
-                street, city, '', '', delivery_note, tracking_num,
-                totals['seller_earnings'], totals['platform_commission'], totals['total_buyer_pays'], 'Pending', None, datetime.utcnow(),
-                totals['delivery_charges'], payment_method, shipping_company,
-            ))
-            order_id = cursor.lastrowid
-            cursor.execute('UPDATE Products SET status=?, tracking_number=?, order_id=? WHERE id=?',
-                           ('sold', tracking_num, order_id, product['id']))
+        cursor.execute('''
+            INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
+                buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
+                seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date,
+                delivery_charges, payment_method, shipping_company)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            product['id'], buyer_id, seller_id, 'Order Placed', buyer_name, buyer_email, buyer_phone,
+            street, city, '', '', delivery_note, tracking_num,
+            totals['seller_earnings'], totals['platform_commission'], totals['total_buyer_pays'], 'Pending', None, datetime.utcnow(),
+            totals['delivery_charges'], payment_method, shipping_company,
+        ))
+        order_id = cursor.lastrowid
+        cursor.execute('UPDATE Products SET status=?, tracking_number=?, order_id=? WHERE id=?',
+                       ('sold', tracking_num, order_id, product['id']))
 
         send_buyer_email(buyer_email, buyer_name, product['title'], totals['total_buyer_pays'], tracking_num, f"{street}, {city}", payment_method)
 
         seller_info = None
         conn_temp2 = get_db_connection()
         cur_temp2 = conn_temp2.cursor()
-        if DATABASE_URL:
-            cur_temp2.execute('SELECT name, email FROM users WHERE user_id = %s', (seller_id,))
-            row = cur_temp2.fetchone()
-            seller_info = dict(zip([d[0] for d in cur_temp2.description], row)) if row else None
-        else:
-            row = cur_temp2.execute('SELECT name, email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
-            seller_info = dict(row) if row else None
+        row = cur_temp2.execute('SELECT name, email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
+        seller_info = dict(row) if row else None
         conn_temp2.close()
 
         if seller_info:
@@ -905,12 +800,8 @@ def sell():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        if DATABASE_URL:
-            cursor.execute('SELECT title, description FROM Products')
-            existing_rows = [dict(zip([desc[0] for desc in cursor.description], row)) for row in cursor.fetchall()]
-        else:
-            raw = cursor.execute('SELECT title, description FROM Products').fetchall()
-            existing_rows = [{'title': row['title'], 'description': row['description']} for row in raw]
+        raw = cursor.execute('SELECT title, description FROM Products').fetchall()
+        existing_rows = [{'title': row['title'], 'description': row['description']} for row in raw]
 
         ai_result = analyze_item(category, times_worn, has_tears, description, tags, title=title, existing_listings=existing_rows)
         # We no longer use a numeric AI quality score. Keep the descriptive summary for UI/AI-generated descriptions.
@@ -922,16 +813,10 @@ def sell():
         if duplicate:
             flash('Warning: this listing appears similar to another item already on the marketplace.')
 
-        if DATABASE_URL:
-            cursor.execute('''
-                INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id']))
-        else:
-            cursor.execute('''
-                INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id']))
+        cursor.execute('''
+            INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id']))
         conn.commit()
         conn.close()
 
@@ -949,12 +834,7 @@ def seller_listings():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('SELECT * FROM Products WHERE seller_id = %s', (session['user_id'],))
-        columns = [desc[0] for desc in cursor.description]
-        listings = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        listings = cursor.execute('SELECT * FROM Products WHERE seller_id = ?', (session['user_id'],)).fetchall()
+    listings = cursor.execute('SELECT * FROM Products WHERE seller_id = ?', (session['user_id'],)).fetchall()
     conn.close()
     return render_template('seller_listings.html', listings=listings)
 
@@ -997,10 +877,7 @@ def delete_listing(product_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('DELETE FROM Products WHERE id = %s', (product_id,))
-    else:
-        cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
+    cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
     conn.commit()
     conn.close()
     
@@ -1040,29 +917,16 @@ def track_orders():
     orders = []
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                p.image_url, p.images,
-                o.buyer_name, o.buyer_email, o.buyer_phone
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            WHERE o.buyer_id = %s
-            ORDER BY o.order_date DESC
-        ''', (session['user_id'],))
-        columns = [desc[0] for desc in cursor.description]
-        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                p.image_url, p.images,
-                o.buyer_name, o.buyer_email, o.buyer_phone
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            WHERE o.buyer_id = ?
-            ORDER BY o.order_date DESC
-        ''', (session['user_id'],))
-        orders = [dict(row) for row in cursor.fetchall()]
+    cursor.execute('''
+        SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+            p.image_url, p.images,
+            o.buyer_name, o.buyer_email, o.buyer_phone
+        FROM orders o
+        JOIN Products p ON o.product_id = p.id
+        WHERE o.buyer_id = ?
+        ORDER BY o.order_date DESC
+    ''', (session['user_id'],))
+    orders = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
     for order in orders:
@@ -1081,56 +945,26 @@ def admin_dashboard():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    if DATABASE_URL:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
-                s.name AS seller_name, s.phone AS seller_phone, s.email AS seller_email,
-                b.name AS buyer_name, b.email AS buyer_email, b.phone AS buyer_phone
-            FROM orders o
-            LEFT JOIN Products p ON o.product_id = p.id
-            LEFT JOIN users s ON o.seller_id = s.user_id
-            LEFT JOIN users b ON o.buyer_id = b.user_id
-            ORDER BY o.order_date DESC
-        ''')
-        columns = [desc[0] for desc in cursor.description]
-        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        cursor.execute('SELECT * FROM users ORDER BY join_date DESC')
-        columns = [desc[0] for desc in cursor.description]
-        users = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        cursor.execute('SELECT * FROM Products ORDER BY created_at DESC')
-        columns = [desc[0] for desc in cursor.description]
-        listings = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        cursor.execute('''
-            SELECT category, COUNT(*) as count FROM Products 
-            WHERE status = 'sold' AND category IS NOT NULL 
-            GROUP BY category ORDER BY count DESC
-        ''')
-        columns = [desc[0] for desc in cursor.description]
-        category_stats = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        orders = [dict(row) for row in cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
-                s.name AS seller_name, s.phone AS seller_phone, s.email AS seller_email,
-                b.name AS buyer_name, b.email AS buyer_email, b.phone AS buyer_phone
-            FROM orders o
-            LEFT JOIN Products p ON o.product_id = p.id
-            LEFT JOIN users s ON o.seller_id = s.user_id
-            LEFT JOIN users b ON o.buyer_id = b.user_id
-            ORDER BY o.order_date DESC
-        ''').fetchall()]
-        
-        users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
-        
-        listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
-        
-        category_stats = [dict(row) for row in cursor.execute('''
-            SELECT category, COUNT(*) as count FROM Products 
-            WHERE status = 'sold' AND category IS NOT NULL 
-            GROUP BY category ORDER BY count DESC
-        ''').fetchall()]
+    orders = [dict(row) for row in cursor.execute('''
+        SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
+            s.name AS seller_name, s.phone AS seller_phone, s.email AS seller_email,
+            b.name AS buyer_name, b.email AS buyer_email, b.phone AS buyer_phone
+        FROM orders o
+        LEFT JOIN Products p ON o.product_id = p.id
+        LEFT JOIN users s ON o.seller_id = s.user_id
+        LEFT JOIN users b ON o.buyer_id = b.user_id
+        ORDER BY o.order_date DESC
+    ''').fetchall()]
+    
+    users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
+    
+    listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
+    
+    category_stats = [dict(row) for row in cursor.execute('''
+        SELECT category, COUNT(*) as count FROM Products 
+        WHERE status = 'sold' AND category IS NOT NULL 
+        GROUP BY category ORDER BY count DESC
+    ''').fetchall()]
     
     conn.close()
     
@@ -1177,27 +1011,15 @@ def seller_orders():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                p.image_url, p.images, p.asking_price
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            WHERE o.seller_id = %s
-            ORDER BY o.order_date DESC
-        ''', (session['user_id'],))
-        columns = [desc[0] for desc in cursor.description]
-        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    else:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                p.image_url, p.images, p.asking_price
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            WHERE o.seller_id = ?
-            ORDER BY o.order_date DESC
-        ''', (session['user_id'],))
-        orders = [dict(row) for row in cursor.fetchall()]
+    cursor.execute('''
+        SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+            p.image_url, p.images, p.asking_price
+        FROM orders o
+        JOIN Products p ON o.product_id = p.id
+        WHERE o.seller_id = ?
+        ORDER BY o.order_date DESC
+    ''', (session['user_id'],))
+    orders = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
     for order in orders:
@@ -1219,26 +1041,14 @@ def order_detail(order_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                p.image_url, p.images, p.asking_price, p.seller_id
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            WHERE o.order_id = %s
-        ''', (order_id,))
-        columns = [desc[0] for desc in cursor.description]
-        order = cursor.fetchone()
-        order = dict(zip(columns, order)) if order else None
-    else:
-        order = cursor.execute('''
-            SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-                p.image_url, p.images, p.asking_price, p.seller_id
-            FROM orders o
-            JOIN Products p ON o.product_id = p.id
-            WHERE o.order_id = ?
-        ''', (order_id,)).fetchone()
-        order = dict(order) if order else None
+    order = cursor.execute('''
+        SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
+            p.image_url, p.images, p.asking_price, p.seller_id
+        FROM orders o
+        JOIN Products p ON o.product_id = p.id
+        WHERE o.order_id = ?
+    ''', (order_id,)).fetchone()
+    order = dict(order) if order else None
     conn.close()
 
     if not order:
@@ -1269,13 +1079,8 @@ def seller_update_order(order_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('SELECT seller_id FROM orders WHERE order_id = %s', (order_id,))
-        row = cursor.fetchone()
-        order = dict(zip([d[0] for d in cursor.description], row)) if row else None
-    else:
-        order = cursor.execute('SELECT seller_id FROM orders WHERE order_id = ?', (order_id,)).fetchone()
-        order = dict(order) if order else None
+    order = cursor.execute('SELECT seller_id FROM orders WHERE order_id = ?', (order_id,)).fetchone()
+    order = dict(order) if order else None
 
     if not order or order['seller_id'] != session['user_id']:
         flash('You can only update your own orders.')
@@ -1286,22 +1091,13 @@ def seller_update_order(order_id):
     tracking_number = sanitize_input(request.form.get('tracking_number', ''))
 
     if new_status and new_status in ORDER_STATUSES:
-        if DATABASE_URL:
-            cursor.execute('UPDATE orders SET status = %s WHERE order_id = %s', (new_status, order_id))
-        else:
-            cursor.execute('UPDATE orders SET status = ? WHERE order_id = ?', (new_status, order_id))
+        cursor.execute('UPDATE orders SET status = ? WHERE order_id = ?', (new_status, order_id))
 
     if courier_company in COURIER_OPTIONS:
-        if DATABASE_URL:
-            cursor.execute('UPDATE orders SET shipping_company = %s WHERE order_id = %s', (courier_company, order_id))
-        else:
-            cursor.execute('UPDATE orders SET shipping_company = ? WHERE order_id = ?', (courier_company, order_id))
+        cursor.execute('UPDATE orders SET shipping_company = ? WHERE order_id = ?', (courier_company, order_id))
 
     if tracking_number:
-        if DATABASE_URL:
-            cursor.execute('UPDATE orders SET tracking_number = %s WHERE order_id = %s', (tracking_number, order_id))
-        else:
-            cursor.execute('UPDATE orders SET tracking_number = ? WHERE order_id = ?', (tracking_number, order_id))
+        cursor.execute('UPDATE orders SET tracking_number = ? WHERE order_id = ?', (tracking_number, order_id))
 
     conn.commit()
     conn.close()
@@ -1334,10 +1130,7 @@ def admin_delete_user(user_id):
 
     try:
         # Load the target user
-        if DATABASE_URL:
-            cursor.execute('SELECT is_admin, email FROM users WHERE user_id = %s', (user_id,))
-        else:
-            cursor.execute('SELECT is_admin, email FROM users WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT is_admin, email FROM users WHERE user_id = ?', (user_id,))
         target = cursor.fetchone()
         if not target:
             flash('User not found.')
@@ -1350,16 +1143,10 @@ def admin_delete_user(user_id):
 
         # Count administrators remaining AFTER this deletion (exclude the target itself).
         # Rows use dict_factory, so read the count by its aliased column name (not integer index).
-        if DATABASE_URL:
-            cursor.execute(
-                'SELECT COUNT(*) AS cnt FROM users WHERE (is_admin = 1 OR lower(email) = lower(%s)) AND user_id <> %s',
-                (os.environ.get('ADMIN_EMAIL', ''), user_id),
-            )
-        else:
-            cursor.execute(
-                'SELECT COUNT(*) AS cnt FROM users WHERE (is_admin = 1 OR lower(email) = lower(?)) AND user_id <> ?',
-                (os.environ.get('ADMIN_EMAIL', ''), user_id),
-            )
+        cursor.execute(
+            'SELECT COUNT(*) AS cnt FROM users WHERE (is_admin = 1 OR lower(email) = lower(?)) AND user_id <> ?',
+            (os.environ.get('ADMIN_EMAIL', ''), user_id),
+        )
         remaining_admins = cursor.fetchone()['cnt']
 
         if is_target_admin and remaining_admins == 0:
@@ -1411,10 +1198,7 @@ def admin_delete_listing(product_id):
         pass
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('DELETE FROM Products WHERE id = %s', (product_id,))
-    else:
-        cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
+    cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
     conn.commit()
     conn.close()
     flash('Listing removed.')
@@ -1432,10 +1216,7 @@ def admin_update_order(order_id):
         return redirect(url_for('admin_dashboard', section='orders'))
     conn = get_db_connection()
     cursor = conn.cursor()
-    if DATABASE_URL:
-        cursor.execute('UPDATE orders SET status = %s WHERE order_id = %s', (new_status, order_id))
-    else:
-        cursor.execute('UPDATE orders SET status = ? WHERE order_id = ?', (new_status, order_id))
+    cursor.execute('UPDATE orders SET status = ? WHERE order_id = ?', (new_status, order_id))
     conn.commit()
     conn.close()
     flash('Order status updated.')
@@ -1452,11 +1233,8 @@ def post_question(product_id):
         flash('Please provide a question.')
         return redirect(url_for('product_details', product_id=product_id))
     conn = get_db_connection()
-    cur = conn.cursor()
-    if DATABASE_URL:
-        cur.execute('INSERT INTO questions (product_id, user_id, content) VALUES (%s, %s, %s)', (product_id, session['user_id'], content))
-    else:
-        cur.execute('INSERT INTO questions (product_id, user_id, content) VALUES (?, ?, ?)', (product_id, session['user_id'], content))
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO questions (product_id, user_id, content) VALUES (?, ?, ?)', (product_id, session['user_id'], content))
     conn.commit()
     conn.close()
     flash('Your question has been posted publicly.')
@@ -1478,10 +1256,7 @@ def post_answer(product_id, question_id):
         return redirect(url_for('product_details', product_id=product_id))
     conn = get_db_connection()
     cur = conn.cursor()
-    if DATABASE_URL:
-        cur.execute('INSERT INTO answers (question_id, user_id, content) VALUES (%s, %s, %s)', (question_id, session['user_id'], content))
-    else:
-        cur.execute('INSERT INTO answers (question_id, user_id, content) VALUES (?, ?, ?)', (question_id, session['user_id'], content))
+    cur.execute('INSERT INTO answers (question_id, user_id, content) VALUES (?, ?, ?)', (question_id, session['user_id'], content))
     conn.commit()
     conn.close()
     flash('Your answer has been posted publicly.')
@@ -1532,33 +1307,21 @@ def signup():
         cursor = conn.cursor()
 
         try:
-            if DATABASE_URL:
-                cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(%s)', (email,))
-            else:
-                cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?)', (email,))
+            cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?)', (email,))
             if cursor.fetchone():
                 flash('An account with this email already exists.')
                 return render_form()
 
             if username:
-                if DATABASE_URL:
-                    cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(%s)', (username,))
-                else:
-                    cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(?)', (username,))
+                cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(?)', (username,))
                 if cursor.fetchone():
                     flash('This username is already taken.')
                     return render_form()
 
-            if DATABASE_URL:
-                cursor.execute('''
-                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
-            else:
-                cursor.execute('''
-                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
+            cursor.execute('''
+                INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
             conn.commit()
             flash('Account created successfully! Please log in to continue.')
             return redirect(url_for('login'))
@@ -1588,14 +1351,8 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        if DATABASE_URL:
-            cursor.execute('SELECT * FROM users WHERE lower(email) = lower(%s)', (email,))
-            columns = [desc[0] for desc in cursor.description]
-            row = cursor.fetchone()
-            user = dict(zip(columns, row)) if row else None
-        else:
-            cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email,))
-            user = cursor.fetchone()
+        cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email,))
+        user = cursor.fetchone()
 
         conn.close()
 

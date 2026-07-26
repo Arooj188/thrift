@@ -1,33 +1,23 @@
 import sqlite3
 
 def build_marketplace_tables():
-    # Connects to your database file (or creates it fresh)
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
 
-    print("Step 1: Dropping any old tables to start fresh...")
-    cursor.execute("DROP TABLE IF EXISTS orders;")
-    cursor.execute("DROP TABLE IF EXISTS Products;")
-    cursor.execute("DROP TABLE IF EXISTS users;")
-
-    print("Step 2: Building the master Users table...")
-    # Stores profiles for both buyers and sellers in Pakistan
     cursor.execute('''
-         (
+        CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            phone TEXT NOT NULL,         -- Vital for Trax/TCS courier updates
-            address TEXT NOT NULL,       -- Used for seller pickup or buyer delivery
-            city TEXT NOT NULL           -- e.g., Karachi, Lahore, Islamabad
+            phone TEXT NOT NULL,
+            address TEXT NOT NULL,
+            city TEXT NOT NULL
         )
     ''')
 
-    print("Step 3: Building your original Products table with backend hooks...")
-    # Notice 'seller_id' at the bottom. This links the item to its owner!
     cursor.execute('''
-        CREATE TABLE Products (
+        CREATE TABLE IF NOT EXISTS Products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             brand TEXT,
@@ -35,7 +25,7 @@ def build_marketplace_tables():
             size TEXT,
             color TEXT,
             asking_price REAL NOT NULL,
-            status TEXT DEFAULT 'available', -- Can switch to 'sold' on checkout
+            status TEXT DEFAULT 'available',
             image_url TEXT,
             times_worn INTEGER,
             seller_condition TEXT,
@@ -43,20 +33,18 @@ def build_marketplace_tables():
             seller_address TEXT,
             quality_score INTEGER,
             condition_summary TEXT,
-            seller_id INTEGER,               -- The crucial multi-vendor connection line
+            seller_id INTEGER,
             FOREIGN KEY (seller_id) REFERENCES users (user_id)
         )
     ''')
 
-    print("Step 4: Building the master Transactions Ledger...")
-    # Tracks which buyer purchased an item from which seller's house
     cursor.execute('''
-        CREATE TABLE orders (
+        CREATE TABLE IF NOT EXISTS orders (
             order_id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL,
             buyer_id INTEGER NOT NULL,
             seller_id INTEGER NOT NULL,
-            status TEXT DEFAULT 'Pending',   -- Changes to 'Shipped' or 'Delivered'
+            status TEXT DEFAULT 'Pending',
             order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (product_id) REFERENCES Products (id),
             FOREIGN KEY (buyer_id) REFERENCES users (user_id),
@@ -66,8 +54,7 @@ def build_marketplace_tables():
 
     connection.commit()
     connection.close()
-    print("🎉 Foundation completed successfully! Database is completely empty and ready.")
+    print("Tables ensured successfully.")
 
 if __name__ == '__main__':
     build_marketplace_tables()
-CREATE TABLE users
