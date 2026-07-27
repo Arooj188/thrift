@@ -2,6 +2,8 @@ import importlib
 import json
 import os
 import sqlite3
+import firebase_admin
+from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -469,6 +471,65 @@ def get_product_by_id(product_id):
     return product
 
 
+def _get_firestore_db():
+    try:
+        if not firebase_admin._apps:
+            cred = credentials.ApplicationDefault()
+            firebase_admin.initialize_app(cred)
+        return firestore.client()
+    except Exception:
+        return None
+
+
+def get_products_from_firestore(category=None):
+    db = _get_firestore_db()
+    if db is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if category:
+            cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
+        else:
+            cursor.execute("SELECT * FROM Products WHERE status = 'available'")
+        products = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return products
+    try:
+        docs = db.collection('Products').where('status', '==', 'available').stream()
+        products = []
+        for doc in docs:
+            product = doc.to_dict()
+            product['id'] = int(doc.id)
+            if category and product.get('category') != category:
+                continue
+            products.append(product)
+        return products
+    except Exception:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if category:
+            cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
+        else:
+            cursor.execute("SELECT * FROM Products WHERE status = 'available'")
+        products = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return products
+
+
+def get_single_product_from_firestore(product_id):
+    db = _get_firestore_db()
+    if db is None:
+        return get_product_by_id(product_id)
+    try:
+        doc = db.collection('Products').document(str(product_id)).get()
+        if doc.exists:
+            product = doc.to_dict()
+            product['id'] = int(doc.id)
+            return product
+    except Exception:
+        pass
+    return get_product_by_id(product_id)
+
+
 def is_admin_user():
     if 'user_id' not in session:
         return False
@@ -579,15 +640,7 @@ def ensure_cart_exists():
 @app.route('/')
 def index():
     category = request.args.get('category')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if category:
-        cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
-    else:
-        cursor.execute("SELECT * FROM Products WHERE status = 'available'")
-    
-    products = cursor.fetchall()
-    conn.close()
+    products = get_products_from_firestore(category=category)
     return render_template('index.html', products=products, selected_category=category)
 
 @app.route('/how-it-works')
@@ -596,10 +649,7 @@ def how_it_works():
 
 @app.route('/product/<int:product_id>')
 def product_details(product_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    product = cursor.execute("SELECT * FROM Products WHERE id = ?", (product_id,)).fetchone()
-    conn.close()
+    product = get_single_product_from_firestore(product_id)
     if not product:
         flash("Product not found!")
         return redirect(url_for('index'))
