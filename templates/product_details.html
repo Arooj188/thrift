@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+    .product-detail-layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; margin-top: 20px; align-items: start; }
     .product-gallery {
         display: grid;
         grid-template-columns: 120px 1fr;
@@ -98,6 +99,7 @@
         transform: translateY(-1px);
     }
     @media (max-width: 768px) {
+        .product-detail-layout { grid-template-columns: 1fr; gap: 24px; }
         .product-gallery {
             grid-template-columns: 1fr;
             height: auto;
@@ -107,24 +109,185 @@
             overflow-x: auto;
         }
         .product-thumbs img {
-            width: 80px;
-            height: 80px;
+            width: 90px;
+            height: 90px;
             flex-shrink: 0;
+        }
+        .product-main { min-height: 340px; }
+        .spec-list { font-size: 15px; margin-bottom: 24px; }
+        .btn-submit { width: 100%; display: block; text-align: center; padding: 16px; }
+        .qna-box form { flex-wrap: wrap; }
+        .qna-box input { flex: 1 1 auto; }
+    }
+
+    /* ==================== Product Lightbox ==================== */
+    .lightbox-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 250ms ease, visibility 250ms ease;
+    }
+    .lightbox-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    .lightbox-content {
+        position: relative;
+        width: 90vw;
+        height: 90vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: scale(0.96);
+        transition: transform 250ms ease;
+    }
+    .lightbox-overlay.active .lightbox-content {
+        transform: scale(1);
+    }
+    .lightbox-image-wrapper {
+        position: relative;
+        max-width: 100%;
+        max-height: 100%;
+        overflow: hidden;
+        border-radius: 4px;
+        cursor: grab;
+    }
+    .lightbox-image-wrapper:active {
+        cursor: grabbing;
+    }
+    .lightbox-image {
+        display: block;
+        max-width: 90vw;
+        max-height: 85vh;
+        object-fit: contain;
+        transform-origin: center center;
+        transition: transform 200ms ease;
+        user-select: none;
+        -webkit-user-drag: none;
+    }
+    .lightbox-close {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: #fff;
+        font-size: 28px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        transition: background 200ms ease;
+        line-height: 1;
+    }
+    .lightbox-close:hover {
+        background: rgba(255, 255, 255, 0.25);
+    }
+    .lightbox-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255, 255, 255, 0.12);
+        border: none;
+        color: #fff;
+        font-size: 32px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        transition: background 200ms ease, transform 200ms ease;
+        line-height: 1;
+    }
+    .lightbox-nav:hover {
+        background: rgba(255, 255, 255, 0.28);
+        transform: translateY(-50%) scale(1.05);
+    }
+    .lightbox-nav.prev { left: 16px; }
+    .lightbox-nav.next { right: 16px; }
+    .lightbox-counter {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 13px;
+        font-weight: 600;
+        z-index: 10;
+        letter-spacing: 0.5px;
+    }
+    .lightbox-zoom-controls {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        gap: 8px;
+        z-index: 10;
+    }
+    .lightbox-zoom-btn {
+        background: rgba(255, 255, 255, 0.12);
+        border: none;
+        color: #fff;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 200ms ease;
+        line-height: 1;
+    }
+    .lightbox-zoom-btn:hover {
+        background: rgba(255, 255, 255, 0.28);
+    }
+    @media (max-width: 768px) {
+        .lightbox-image {
+            max-width: 95vw;
+            max-height: 75vh;
+        }
+        .lightbox-nav {
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+        }
+        .lightbox-close {
+            top: 10px;
+            right: 12px;
+            width: 38px;
+            height: 38px;
+            font-size: 24px;
         }
     }
 </style>
-<div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; margin-top: 20px; align-items: start;">
+<div class="product-detail-layout">
     <div class="product-gallery">
         <div class="product-thumbs">
             {% if has_product_image(product.image_url, product.images) %}
-                {% for img in image_list[:4] %}
+                {% for img in image_list %}
                 <img src="{{ build_image_url(img) }}" alt="{{ product.title }}" onclick="document.getElementById('mainImage').src='{{ build_image_url(img) }}'">
                 {% endfor %}
             {% endif %}
         </div>
-        <div class="product-main">
+        <div class="product-main" id="productMain">
             {% if has_product_image(product.image_url, product.images) %}
-            <img src="{{ build_image_url(image_list[0]) }}" id="mainImage" alt="{{ product.title }}">
+            <img src="{{ build_image_url(image_list[0]) }}" id="mainImage" alt="{{ product.title }}" style="cursor: zoom-in;">
             {% else %}
             <div style="width: 100%; height: 100%; min-height: 400px; display: flex; align-items: center; justify-content: center; color: #767676;">No image available</div>
             {% endif %}
@@ -156,11 +319,14 @@
             <div><span style="color: #767676;">Color:</span> <strong>{{ product.color }}</strong></div>
         </div>
 
-        <form action="/cart/add/{{ product.id }}" method="POST" style="display: inline; margin-right: 8px;">
-            <button type="submit" class="btn-submit" style="padding: 16px 28px;">Add to Shopping Bag</button>
-        </form>
-        {% if session.user_id and session.user_id != product.seller_id %}
-        <a href="/messages?to={{ product.seller_id }}&product={{ product.id }}" class="btn-submit" style="padding: 16px 28px; text-decoration: none; display: inline-block; background: #ffffff; color: #1c1c1c; border: 1px solid #e5e7eb;">Message Seller</a>
+        {% if session.user_id != product.seller_id %}
+            {% if seller_contact_preference == 'whatsapp' and whatsapp_url %}
+                <a href="{{ whatsapp_url | safe }}" target="_blank" rel="noopener" class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller on WhatsApp</a>
+            {% elif seller_contact_preference == 'email' and gmail_url %}
+                <a href="{{ gmail_url | safe }}"
+                   onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
+                   class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller via Email</a>
+            {% endif %}
         {% endif %}
         
         <div class="qna-box">
@@ -197,4 +363,299 @@
         </div>
     </div>
 </div>
+
+<!-- Product Lightbox -->
+<div class="lightbox-overlay" id="productLightbox">
+    <div class="lightbox-content">
+        {% if image_list|length > 1 %}
+        <button class="lightbox-nav prev" id="lightboxPrev" aria-label="Previous image">&lsaquo;</button>
+        {% endif %}
+        <div class="lightbox-image-wrapper" id="lightboxWrapper">
+            <img src="" alt="{{ product.title }}" class="lightbox-image" id="lightboxImage">
+        </div>
+        {% if image_list|length > 1 %}
+        <button class="lightbox-nav next" id="lightboxNext" aria-label="Next image">&rsaquo;</button>
+        {% endif %}
+        <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+        <div class="lightbox-counter" id="lightboxCounter"></div>
+        <div class="lightbox-zoom-controls">
+            <button class="lightbox-zoom-btn" id="lightboxZoomOut" aria-label="Zoom out">&minus;</button>
+            <button class="lightbox-zoom-btn" id="lightboxZoomIn" aria-label="Zoom in">&plus;</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    var lightbox = document.getElementById('productLightbox');
+    var lightboxImage = document.getElementById('lightboxImage');
+    var lightboxWrapper = document.getElementById('lightboxWrapper');
+    var lightboxPrev = document.getElementById('lightboxPrev');
+    var lightboxNext = document.getElementById('lightboxNext');
+    var lightboxClose = document.getElementById('lightboxClose');
+    var lightboxCounter = document.getElementById('lightboxCounter');
+    var lightboxZoomIn = document.getElementById('lightboxZoomIn');
+    var lightboxZoomOut = document.getElementById('lightboxZoomOut');
+
+    var images = [];
+    var currentIndex = 0;
+    var scale = 1;
+    var translateX = 0;
+    var translateY = 0;
+    var isDragging = false;
+    var startX = 0;
+    var startY = 0;
+    var startTranslateX = 0;
+    var startTranslateY = 0;
+    var lastTap = 0;
+    var pinchStartDist = 0;
+    var pinchStartScale = 1;
+
+    {% for img in image_list %}
+    images.push({{ build_image_url(img) | tojson }});
+    {% endfor %}
+
+    function clamp(val, min, max) {
+        return Math.max(min, Math.min(max, val));
+    }
+
+    function getDist(touches) {
+        var dx = touches[0].clientX - touches[1].clientX;
+        var dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function setTransform(animate) {
+        if (animate === undefined) animate = true;
+        var duration = animate ? 'transform 200ms ease' : 'none';
+        lightboxImage.style.transition = duration;
+        lightboxImage.style.transform = 'translate(' + translateX + 'px, ' + translateY + 'px) scale(' + scale + ')';
+    }
+
+    function updateCounter() {
+        if (lightboxCounter) {
+            lightboxCounter.textContent = (currentIndex + 1) + ' / ' + images.length;
+        }
+    }
+
+    function showImage(index) {
+        if (index < 0 || index >= images.length) return;
+        currentIndex = index;
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        setTransform(false);
+        lightboxImage.src = images[currentIndex];
+        updateCounter();
+        if (lightboxPrev) lightboxPrev.style.display = images.length > 1 ? 'flex' : 'none';
+        if (lightboxNext) lightboxNext.style.display = images.length > 1 ? 'flex' : 'none';
+    }
+
+    function openLightbox() {
+        if (!images.length) return;
+        showImage(0);
+        lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+        lightbox.classList.remove('active');
+        document.body.style.overflow = '';
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+    }
+
+    function zoomIn() {
+        scale = clamp(scale + 0.5, 1, 4);
+        setTransform();
+        clampPan();
+    }
+
+    function zoomOut() {
+        scale = clamp(scale - 0.5, 1, 4);
+        setTransform();
+        clampPan();
+    }
+
+    function clampPan() {
+        if (scale <= 1) {
+            translateX = 0;
+            translateY = 0;
+        }
+        var rect = lightboxImage.getBoundingClientRect();
+        var maxX = Math.max(0, (rect.width * scale - rect.width) / 2);
+        var maxY = Math.max(0, (rect.height * scale - rect.height) / 2);
+        translateX = clamp(translateX, -maxX, maxX);
+        translateY = clamp(translateY, -maxY, maxY);
+    }
+
+    function nextImage() {
+        if (images.length <= 1) return;
+        showImage((currentIndex + 1) % images.length);
+    }
+
+    function prevImage() {
+        if (images.length <= 1) return;
+        showImage((currentIndex - 1 + images.length) % images.length);
+    }
+
+    // Click main image to open lightbox
+    var mainImageEl = document.getElementById('mainImage');
+    if (mainImageEl) {
+        mainImageEl.addEventListener('click', openLightbox);
+        mainImageEl.style.cursor = 'zoom-in';
+    }
+
+    // Close
+    lightboxClose.addEventListener('click', closeLightbox);
+    lightbox.addEventListener('click', function(e) {
+        if (e.target === lightbox) closeLightbox();
+    });
+
+    // Zoom buttons
+    lightboxZoomIn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        zoomIn();
+    });
+    lightboxZoomOut.addEventListener('click', function(e) {
+        e.stopPropagation();
+        zoomOut();
+    });
+
+    // Mouse wheel zoom
+    lightbox.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        if (e.deltaY < 0) zoomIn();
+        else zoomOut();
+    }, { passive: false });
+
+    // Double click / double tap zoom
+    lightboxImage.addEventListener('click', function(e) {
+        var now = Date.now();
+        if (now - lastTap < 300) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (scale > 1) {
+                scale = 1;
+                translateX = 0;
+                translateY = 0;
+            } else {
+                var rect = lightboxImage.getBoundingClientRect();
+                var x = e.clientX - rect.left - rect.width / 2;
+                var y = e.clientY - rect.top - rect.height / 2;
+                scale = 2.5;
+                clampPan();
+                translateX = -x / scale;
+                translateY = -y / scale;
+                clampPan();
+            }
+            setTransform();
+        }
+        lastTap = now;
+    });
+
+    // Panning on desktop
+    lightboxImage.addEventListener('mousedown', function(e) {
+        if (scale <= 1) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startTranslateX = translateX;
+        startTranslateY = translateY;
+        lightboxImage.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        translateX = startTranslateX + dx;
+        translateY = startTranslateY + dy;
+        clampPan();
+        setTransform(false);
+    });
+    window.addEventListener('mouseup', function() {
+        if (isDragging) {
+            isDragging = false;
+            lightboxImage.style.cursor = scale > 1 ? 'grab' : 'zoom-in';
+        }
+    });
+
+    // Touch swipe & pinch
+    lightboxImage.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            pinchStartDist = getDist(e.touches);
+            pinchStartScale = scale;
+        } else if (e.touches.length === 1) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            startTranslateX = translateX;
+            startTranslateY = translateY;
+            lastTap = Date.now();
+        }
+    }, { passive: true });
+
+    lightboxImage.addEventListener('touchmove', function(e) {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            var newDist = getDist(e.touches);
+            scale = clamp(pinchStartScale * (newDist / pinchStartDist), 1, 4);
+            clampPan();
+            setTransform(false);
+        } else if (e.touches.length === 1 && scale > 1) {
+            var dx = e.touches[0].clientX - startX;
+            var dy = e.touches[0].clientY - startY;
+            translateX = startTranslateX + dx;
+            translateY = startTranslateY + dy;
+            clampPan();
+            setTransform(false);
+        }
+    }, { passive: false });
+
+    lightboxImage.addEventListener('touchend', function(e) {
+        if (e.touches.length === 0) {
+            var now = Date.now();
+            if (now - lastTap < 300) {
+                if (scale > 1) {
+                    scale = 1;
+                    translateX = 0;
+                    translateY = 0;
+                } else {
+                    var rect = lightboxImage.getBoundingClientRect();
+                    var x = (e.changedTouches[0].clientX || startX) - rect.left - rect.width / 2;
+                    var y = (e.changedTouches[0].clientY || startY) - rect.top - rect.height / 2;
+                    scale = 2.5;
+                    clampPan();
+                    translateX = -x / scale;
+                    translateY = -y / scale;
+                    clampPan();
+                }
+                setTransform();
+            }
+        }
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (!lightbox.classList.contains('active')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') prevImage();
+        if (e.key === 'ArrowRight') nextImage();
+        if (e.key === '+' || e.key === '=') zoomIn();
+        if (e.key === '-') zoomOut();
+    });
+
+    // Nav buttons
+    if (lightboxPrev) lightboxPrev.addEventListener('click', function(e) { e.stopPropagation(); prevImage(); });
+    if (lightboxNext) lightboxNext.addEventListener('click', function(e) { e.stopPropagation(); nextImage(); });
+
+    // Hide nav buttons if only one image
+    if (images.length <= 1) {
+        if (lightboxPrev) lightboxPrev.style.display = 'none';
+        if (lightboxNext) lightboxNext.style.display = 'none';
+    }
+})();
+</script>
 {% endblock %}

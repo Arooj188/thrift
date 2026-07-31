@@ -23,18 +23,21 @@
         .btn-sell:hover { background-color: #333333; transform: translateY(-1px); }
 
         /* Mobile Cart Button */
-        .mobile-cart-btn { display: none; background: none; border: none; font-size: 20px; cursor: pointer; color: #1c1c1c; padding: 4px 8px; text-decoration: none; font-weight: 700; }
+        
         
         /* Left Side Pop-out Menu Panel */
-        .sidebar { position: fixed; top: 0; left: -300px; width: 280px; height: 100%; background: #fbf9f6; border-right: 1px solid #f2efea; box-shadow: 5px 0 15px rgba(0,0,0,0.05); padding: 40px 24px; transition: left 0.3s ease; z-index: 200; box-sizing: border-box; overflow-y: auto; }
+        .sidebar { position: fixed; top: 0; left: -300px; width: 280px; height: 100%; background: #fbf9f6; border-right: 1px solid #f2efea; box-shadow: 5px 0 15px rgba(0,0,0,0.05); padding: 40px 24px; transition: left 0.3s ease; z-index: 200; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; }
         .sidebar.active { left: 0; }
         .sidebar-close { background: none; border: none; font-size: 28px; cursor: pointer; position: absolute; top: 20px; right: 20px; color: #767676; }
         .sidebar-close:hover { color: #1c1c1c; }
-        .sidebar-menu { display: flex; flex-direction: column; gap: 6px; margin-top: 40px; }
+        .sidebar-menu { display: flex; flex-direction: column; gap: 6px; margin-top: 40px; flex: 1; }
         .sidebar-menu h3 { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #767676; margin: 24px 0 8px 0; }
-        .sidebar-menu a { text-decoration: none; color: #1c1c1c; font-size: 15px; font-weight: 600; padding: 10px 0; display: block; border-bottom: 1px solid #f2efea; transition: color 0.2s ease; }
+        .sidebar-menu a { text-decoration: none; color: #1c1c1c; font-size: 15px; font-weight: 600; padding: 14px 0; display: block; border-bottom: 1px solid #f2efea; transition: color 0.2s ease; min-height: 44px; }
         .sidebar-menu a:hover { color: #767676; }
-        .sidebar-menu .btn-sell { display: inline-block; text-align: center; margin-top: 16px; font-size: 12px; padding: 12px 20px; width: auto; }
+        .sidebar-menu .sidebar-section { margin-bottom: 8px; }
+        .sidebar-menu .sidebar-section:first-child { margin-top: 0; }
+        .sidebar-menu .sidebar-section--sell { margin-top: auto; padding-top: 16px; }
+        .sidebar-menu .sidebar-section--sell .btn-sell { display: block; width: 100%; text-align: center; margin-top: 0; }
         
         /* Sidebar Overlay */
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 150; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
@@ -45,7 +48,7 @@
         .flash-msg { background-color: #f2efea; border-left: 3px solid #1c1c1c; color: #1c1c1c; padding: 16px; font-size: 14px; margin-bottom: 30px; border-radius: 8px; }
         
         /* Homepage Info Footer Sections */
-        .home-section { margin-top: 100px; padding: 60px 0; border-top: 1px solid #f2efea; }
+        .home-section { margin-top: 100px; padding: 60px 0; border-top: 1px solid #f2efea; scroll-margin-top: 100px; }
         .home-section h2 { font-family: Georgia, serif; font-size: 32px; font-weight: 400; margin-bottom: 20px; }
         .home-section p { color: #555555; line-height: 1.8; font-size: 15px; max-width: 700px; }
 
@@ -66,6 +69,59 @@
         .product-card h3 { margin: 0 0 8px 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
         .product-card .price { font-size: 15px; font-weight: 800; color: #1c1c1c; }
 
+        /* Browse Toolbar */
+        .browse-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0; padding: 12px 0; border-bottom: 1px solid #f2efea; }
+        .browse-toolbar__tabs { display: flex; gap: 24px; overflow-x: auto; flex: 1; min-width: 0; padding-bottom: 2px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .browse-toolbar__tabs::-webkit-scrollbar { display: none; }
+        .browse-tab { background: none; border: none; font-family: inherit; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; padding: 8px 0; cursor: pointer; position: relative; transition: color 0.2s ease; white-space: nowrap; }
+        .browse-tab:hover { color: #1c1c1c; }
+        .browse-tab.active { color: #1c1c1c; }
+        .browse-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background-color: #1c1c1c; border-radius: 1px; }
+        .browse-toolbar__actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .grid-toggle { display: flex; border: 1px solid #f2efea; border-radius: 8px; overflow: hidden; }
+        .grid-toggle__btn { background: #ffffff; border: none; padding: 8px 10px; cursor: pointer; color: #767676; transition: background 0.2s ease, color 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .grid-toggle__btn:hover { color: #1c1c1c; }
+        .grid-toggle__btn.active { background-color: #f2efea; color: #1c1c1c; }
+        .filter-btn { background: none; border: 1px solid #f2efea; border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #1c1c1c; cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease; white-space: nowrap; }
+        .filter-btn:hover { background: #fbf9f6; border-color: #1c1c1c; }
+
+        /* Product Image / Placeholder */
+        .product-img, .product-placeholder { width: 100%; height: 200px; object-fit: cover; border-radius: 10px; display: block; margin-bottom: 12px; }
+        .product-placeholder { background: #f2efea; color: #767676; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+        .grid-compact .product-img, .grid-compact .product-placeholder { height: 150px; margin-bottom: 8px; font-size: 12px; }
+
+        /* Product Grid Modes */
+        .products { display: grid; gap: 20px; margin-top: 30px; }
+        .products.grid-large { grid-template-columns: repeat(3, 1fr); }
+        .products.grid-compact { grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 20px; }
+        @media (max-width: 1200px) { .products.grid-compact { grid-template-columns: repeat(4, 1fr); } }
+        @media (max-width: 900px) { .products.grid-large { grid-template-columns: repeat(2, 1fr); } .products.grid-compact { grid-template-columns: repeat(2, 1fr); gap: 14px; } }
+        @media (max-width: 640px) { .products, .products.grid-large, .products.grid-compact { grid-template-columns: 1fr; } .browse-toolbar { flex-wrap: nowrap; overflow-x: auto; gap: 12px; margin: 12px 0; -webkit-overflow-scrolling: touch; } .browse-toolbar__tabs { flex: 1 1 auto; } .filter-btn { padding: 8px 12px; font-size: 12px; } }
+
+        /* Filter Panel */
+        .filter-panel-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 250; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .filter-panel-overlay.active { opacity: 1; visibility: visible; }
+        .filter-panel { position: fixed; top: 0; right: -340px; width: 340px; max-width: 90vw; height: 100%; background: #fbf9f6; border-left: 1px solid #f2efea; box-shadow: -5px 0 15px rgba(0,0,0,0.05); z-index: 300; transition: right 0.3s ease; display: flex; flex-direction: column; }
+        .filter-panel.active { right: 0; }
+        .filter-panel__header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid #f2efea; }
+        .filter-panel__header h3 { font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0; color: #1c1c1c; }
+        .filter-panel__close { background: none; border: none; font-size: 28px; cursor: pointer; color: #767676; line-height: 1; }
+        .filter-panel__close:hover { color: #1c1c1c; }
+        .filter-panel__body { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+        .filter-group label { display: block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin-bottom: 8px; }
+        .price-range-inputs { display: flex; gap: 8px; align-items: center; }
+        .price-range-inputs input { flex: 1; padding: 10px; border: 1px solid #dcd7ce; border-radius: 8px; background: #ffffff; font-family: inherit; font-size: 14px; color: #1c1c1c; outline: none; transition: border-color 0.2s ease; }
+        .price-range-inputs input:focus { border-color: #1c1c1c; }
+        .price-sep { color: #767676; font-weight: 600; }
+        .filter-group select { width: 100%; padding: 10px; border: 1px solid #dcd7ce; border-radius: 8px; background: #ffffff; font-family: inherit; font-size: 14px; color: #1c1c1c; outline: none; appearance: none; background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http://www.w3.org/2000/svg%22%20width%3D%2210%22%20height%3D%226%22%3E%3Cpath%20fill%3D%22%23767676%22%20d%3D%22M0%200l5%206%205-6z%22/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+        .filter-group select:focus { border-color: #1c1c1c; }
+        .filter-panel__footer { padding: 16px 24px; border-top: 1px solid #f2efea; display: flex; gap: 12px; }
+        .btn-apply, .btn-clear { flex: 1; padding: 12px; border-radius: 999px; font-family: inherit; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: background 0.2s ease, transform 0.2s ease; text-align: center; border: none; }
+        .btn-apply { background: #1c1c1c; color: #fbf9f6; }
+        .btn-apply:hover { background: #333333; transform: translateY(-1px); }
+        .btn-clear { background: #ffffff; color: #1c1c1c; border: 1px solid #f2efea; }
+        .btn-clear:hover { background: #f2efea; transform: translateY(-1px); }
+
         /* Buttons */
         .btn-submit { background-color: #1c1c1c; color: #fbf9f6; border: none; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; transition: background 0.2s ease, transform 0.2s ease; display: inline-block; text-decoration: none; text-align: center; }
         .btn-submit:hover { background-color: #333333; transform: translateY(-1px); }
@@ -76,15 +132,16 @@
         .form-group label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin-bottom: 8px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px 14px; border: 1px solid #dcd7ce; background-color: #fbf9f6; border-radius: 8px; box-sizing: border-box; font-size: 15px; color: #1c1c1c; outline: none; transition: border-color 0.2s ease; }
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #1c1c1c; }
+        .field-error { color: #dc2626; font-size: 12px; margin-top: 6px; font-weight: 600; }
+        .required-star { color: #dc2626; font-weight: 700; margin-left: 2px; }
 
         /* Empty States */
         .empty-box { background: #ffffff; border: 1px solid #e5e7eb; padding: 60px; border-radius: 12px; text-align: center; color: #767676; font-size: 15px; }
 
         @media (max-width: 900px) {
             nav { padding: 16px 20px; }
-            .nav-links { display: none; }
+            .nav-links { display: none !important; }
             .hamburger-btn { display: flex; }
-            .mobile-cart-btn { display: block; }
             .container { margin: 24px auto; }
             .hero h1 { font-size: 36px; }
         }
@@ -93,12 +150,66 @@
             .nav-logo { font-size: 24px; }
             .btn-sell { padding: 8px 14px; }
             .hero h1 { font-size: 32px; }
-            .products { grid-template-columns: 1fr; }
+            .products.grid-large { grid-template-columns: 1fr; }
+            .products.grid-compact { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .grid-compact .product-img, .grid-compact .product-placeholder { height: 140px; margin-bottom: 8px; }
+            .grid-compact .product-card { padding: 10px; }
+            .grid-compact .product-card .size-tag { font-size: 10px; }
+            .grid-compact .product-card h3 { font-size: 13px; }
+            .grid-compact .product-card .price { font-size: 13px; }
+            .grid-compact .product-card .brand { font-size: 11px; }
         }
 
         @media (min-width: 901px) {
             .nav-links { display: flex !important; }
-            .mobile-cart-btn { display: none !important; }
+        }
+
+        @media (max-width: 768px) {
+            /* Mobile header polish */
+            nav { position: relative; justify-content: center; padding: 14px 20px; }
+            .hamburger-btn { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); min-width: 44px; min-height: 44px; padding: 10px; margin-right: 0; gap: 6px; }
+            .hamburger-btn span { height: 2.5px; }
+            .nav-logo { margin: 0 auto; font-size: 24px; }
+
+            /* Mobile hero polish */
+            .hero { padding: 32px 0 24px; }
+            .hero h1 { font-size: 40px; letter-spacing: -1px; margin-bottom: 12px; }
+            .hero p { font-size: 17px; line-height: 1.75; max-width: 100%; }
+
+            /* Container spacing */
+            .container { margin: 20px auto; padding: 0 18px; }
+
+            /* Mobile browse toolbar */
+            .browse-toolbar { gap: 10px; margin: 12px 0; padding: 10px 0; }
+            .browse-toolbar__tabs { gap: 16px; }
+            .browse-tab { font-size: 12px; padding: 10px 0; }
+            .browse-toolbar__actions { gap: 8px; }
+            .grid-toggle__btn { padding: 9px 10px; }
+            .filter-btn { padding: 8px 12px; font-size: 12px; }
+
+            /* Mobile product grid */
+            .products.grid-large { grid-template-columns: 1fr; gap: 16px; margin-top: 20px; }
+            .products.grid-compact { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; }
+            .product-img, .product-placeholder { height: 280px; margin-bottom: 10px; }
+            .grid-compact .product-img, .grid-compact .product-placeholder { height: 160px; margin-bottom: 8px; }
+            .product-card { padding: 14px; }
+            .product-card:active { transform: translateY(-2px); }
+            .product-card .size-tag { margin-bottom: 8px; background: #f2efea; display: inline-block; padding: 2px 8px; border-radius: 4px; }
+            .product-card h3 { font-size: 16px; }
+            .product-card .price { font-size: 16px; }
+            .product-card .brand { font-size: 13px; }
+
+            /* Form touch targets */
+            .form-box input, .form-box select, .form-box textarea,
+            .sell-form-group input, .sell-form-group select, .sell-form-group textarea,
+            .edit-form-group input, .edit-form-group select, .edit-form-group textarea,
+            input[type=\"submit\"], .btn-submit { min-height: 48px; }
+            .form-box .form-group, .sell-form-group, .edit-form-group { margin-bottom: 22px; }
+
+            /* Sidebar mobile polish */
+            .sidebar { padding: 24px 20px; }
+            .sidebar-menu a { padding: 14px 0; min-height: 44px; }
+            .sidebar-close { font-size: 30px; padding: 8px; }
         }
     </style>
 </head>
@@ -111,28 +222,28 @@
     <div class="sidebar" id="leftSidebar">
         <button class="sidebar-close" onclick="toggleMenu()">&times;</button>
         <div class="sidebar-menu">
-            {% if session.user_id %}
-            <h3>Account</h3>
-            <a href="/">Hello, {{ session.user_name }}</a>
-            <a href="/seller/listings">My Listings</a>
-            <a href="/seller/orders">Seller Orders</a>
-            <a href="/orders">Track Orders</a>
-            <a href="/cart">Cart ({% if session.cart %}{{ session.cart|length }}{% else %}0{% endif %})</a>
-            <a href="/logout">Logout</a>
-            {% else %}
-            <h3>Account</h3>
-            <a href="/login">Login</a>
-            <a href="/signup">Sign Up</a>
-            {% endif %}
-            
-            <h3>Browse</h3>
-            <a href="/">Home</a>
-            <a href="/how-it-works">How It Works</a>
-            <a href="/?category=Clothing">Clothing</a>
-            <a href="/?category=Shoes">Shoes</a>
-            
-            <h3>Sell</h3>
-            <a href="/sell" class="btn-sell">List Item for Sale</a>
+            <div class="sidebar-section">
+                <h3>Menu</h3>
+                <a href="/">Home</a>
+                <a href="/?category=Clothing">Browse</a>
+                <a href="/how-it-works">How It Works</a>
+                <a href="/#about">About Our Marketplace</a>
+                <a href="/#contact">Contact & Support</a>
+            </div>
+            <div class="sidebar-section">
+                <h3>Account</h3>
+                {% if session.user_id %}
+                    <a href="/seller/listings">My Listings</a>
+                    <a href="/account">Account Settings</a>
+                    <a href="/logout">Logout</a>
+                {% else %}
+                    <a href="/login">Login</a>
+                    <a href="/signup">Sign Up</a>
+                {% endif %}
+            </div>
+            <div class="sidebar-section sidebar-section--sell">
+                <a href="/sell" class="btn-sell">List Item for Sale</a>
+            </div>
         </div>
     </div>
 
@@ -144,22 +255,17 @@
             <span></span>
         </button>
         <a href="/" class="nav-logo">thrift</a>
-        <a href="/cart" class="mobile-cart-btn" aria-label="Cart">🛒 {% if session.cart %}({{ session.cart|length }}){% else %}(0){% endif %}</a>
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/how-it-works">How It Works</a>
             {% if session.user_id %}
                 <span style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: #1c1c1c; letter-spacing: 0.5px;">Hello, {{ session.user_name }}</span>
+                <a href="/seller/listings">My Listings</a>
+                <a href="/account">Account Settings</a>
                 <a href="/logout">Logout</a>
             {% else %}
                 <a href="/login">Login</a>
                 <a href="/signup">Sign Up</a>
-            {% endif %}
-            <a href="/orders">Track Orders</a>
-            <a href="/cart">Cart ({% if session.cart %}{{ session.cart|length }}{% else %}0{% endif %})</a>
-            {% if session.user_id %}
-                <a href="/seller/listings">My Listings</a>
-                <a href="/seller/orders">Seller Orders</a>
             {% endif %}
             <a href="/sell" class="btn-sell">List Item for Sale</a>
         </div>

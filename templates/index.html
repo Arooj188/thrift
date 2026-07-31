@@ -10,45 +10,263 @@
 
 <h2 class="section-title">Recently Listed Archives</h2>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 50px;">
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; text-align: center;">
-        <div style="font-size: 24px; margin-bottom: 8px;">🔒</div>
-        <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #1c1c1c;">Secure Checkout</div>
-        <div style="font-size: 12px; color: #767676; margin-top: 4px; line-height: 1.5;">Encrypted sessions and hashed passwords protect your account.</div>
+<div class="browse-toolbar">
+    <div class="browse-toolbar__tabs" id="categoryTabs">
+        <button class="browse-tab active" data-category="">All</button>
+        <button class="browse-tab" data-category="Clothing">Clothing</button>
+        <button class="browse-tab" data-category="Shoes">Shoes</button>
     </div>
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; text-align: center;">
-        <div style="font-size: 24px; margin-bottom: 8px;">🤝</div>
-        <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #1c1c1c;">Direct from Seller</div>
-        <div style="font-size: 12px; color: #767676; margin-top: 4px; line-height: 1.5;">Buy directly from verified sellers across Pakistan.</div>
-    </div>
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; text-align: center;">
-        <div style="font-size: 24px; margin-bottom: 8px;">🛡️</div>
-        <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #1c1c1c;">Protected Marketplace</div>
-        <div style="font-size: 12px; color: #767676; margin-top: 4px; line-height: 1.5;">Platform commission ensures accountability on every transaction.</div>
+    <div class="browse-toolbar__actions">
+        <div class="grid-toggle">
+            <button class="grid-toggle__btn active" data-view="large" aria-label="Large grid">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="1" y="1" width="6" height="6" rx="1" />
+                    <rect x="9" y="1" width="6" height="6" rx="1" />
+                    <rect x="1" y="9" width="6" height="6" rx="1" />
+                    <rect x="9" y="9" width="6" height="6" rx="1" />
+                </svg>
+            </button>
+            <button class="grid-toggle__btn" data-view="compact" aria-label="Compact grid">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="1" y="1" width="3" height="6" rx="0.5" />
+                    <rect x="6" y="1" width="3" height="6" rx="0.5" />
+                    <rect x="11" y="1" width="3" height="6" rx="0.5" />
+                    <rect x="1" y="9" width="3" height="6" rx="0.5" />
+                    <rect x="6" y="9" width="3" height="6" rx="0.5" />
+                    <rect x="11" y="9" width="3" height="6" rx="0.5" />
+                </svg>
+            </button>
+        </div>
+        <button class="filter-btn" id="filterToggle">Filters</button>
     </div>
 </div>
 
-{% if not products %}
-<div class="empty-box">
+<div class="empty-box" id="emptyState" style="display: {{ 'block' if not products else 'none' }};">
     No active listings found. Click "List Item for Sale" to add clothes or shoes!
 </div>
-{% else %}
-<div class="products">
-    {% for product in products %}
-    <a href="/product/{{ product.id }}" class="product-card">
-        {% if has_product_image(product.image_url, product.images) %}
-        <img src="{{ build_image_url(product.image_url or product.images) }}" alt="{{ product.title }}" loading="lazy" style="width: 100%; height: 200px; object-fit: cover; border-radius: 10px; display: block; margin-bottom: 12px;">
-        {% else %}
-        <div style="width: 100%; height: 200px; background: #f2efea; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #767676; font-size: 13px; margin-bottom: 12px;">No image</div>
-        {% endif %}
-        <span class="size-tag">SIZE {{ product.size }}</span>
-        <div class="brand">{{ product.brand }}</div>
-        <h3>{{ product.title }}</h3>
-        <div class="price">Rs. {{ "{:,.2f}".format(product.asking_price) }}</div>
-    </a>
-    {% endfor %}
+<div class="products grid-large" id="productGrid"></div>
+
+<div class="filter-panel-overlay" id="filterOverlay"></div>
+<div class="filter-panel" id="filterPanel">
+    <div class="filter-panel__header">
+        <h3>Filters</h3>
+        <button class="filter-panel__close" id="filterClose">&times;</button>
+    </div>
+    <div class="filter-panel__body">
+        <div class="filter-group" id="groupPrice">
+            <label>Price Range</label>
+            <div class="price-range-inputs">
+                <input type="number" id="priceMin" placeholder="Min" min="0">
+                <span class="price-sep">—</span>
+                <input type="number" id="priceMax" placeholder="Max" min="0">
+            </div>
+        </div>
+        <div class="filter-group" id="groupSize">
+            <label>Size</label>
+            <select id="filterSize"><option value="">Any</option></select>
+        </div>
+        <div class="filter-group" id="groupColor">
+            <label>Colour</label>
+            <select id="filterColor"><option value="">Any</option></select>
+        </div>
+    </div>
+    <div class="filter-panel__footer">
+        <button class="btn-apply" id="filterApply">Apply Filters</button>
+        <button class="btn-clear" id="filterClear">Clear Filters</button>
+    </div>
 </div>
-{% endif %}
+
+<script>
+    const allProducts = {{ products | tojson }};
+    document.addEventListener('DOMContentLoaded', () => {
+        const grid = document.getElementById('productGrid');
+        const emptyState = document.getElementById('emptyState');
+        const filterPanel = document.getElementById('filterPanel');
+        const filterOverlay = document.getElementById('filterOverlay');
+        
+        let activeCategory = '{{ selected_category or "" }}';
+        let viewMode = localStorage.getItem('thriftViewMode') || 'large';
+        
+        const filters = {
+            size: null,
+            color: null,
+            minPrice: null,
+            maxPrice: null
+        };
+        
+        function buildImageUrl(value) {
+            if (!value) return '/static/placeholder.svg';
+            if (Array.isArray(value)) value = value[0] || '';
+            if (!value) return '/static/placeholder.svg';
+            value = String(value).trim();
+            if (!value) return '/static/placeholder.svg';
+            if (value.startsWith('[') && value.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(value);
+                    if (Array.isArray(parsed)) return parsed.length ? buildImageUrl(parsed[0]) : '/static/placeholder.svg';
+                } catch(e) {}
+            }
+            if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:')) return value;
+            let normalized = value.replace(/\\/g, '/').replace(/^\/+/, '');
+            if (normalized.startsWith('static/')) normalized = normalized.slice(7);
+            if (normalized.startsWith('uploads/')) return '/static/' + normalized;
+            return '/static/' + normalized;
+        }
+        
+        function hasProductImage(imageUrl, images) {
+            if (imageUrl && String(imageUrl).trim()) return true;
+            if (images) {
+                const s = String(images).trim();
+                if (s.startsWith('[') && s.endsWith(']')) {
+                    try {
+                        const parsed = JSON.parse(s);
+                        if (Array.isArray(parsed) && parsed.length) return true;
+                    } catch(e) {}
+                } else if (s) return true;
+            }
+            return false;
+        }
+        
+        function escapeHtml(text) {
+            if (text == null) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+        
+        function formatPrice(price) {
+            if (price == null) return '—';
+            return 'Rs. ' + Number(price).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        
+        function renderProducts(products) {
+            if (!products.length) {
+                grid.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            emptyState.style.display = 'none';
+            grid.innerHTML = products.map(p => {
+                const imgHtml = hasProductImage(p.image_url, p.images)
+                    ? `<img src="${buildImageUrl(p.image_url || p.images)}" alt="${escapeHtml(p.title)}" loading="lazy" class="product-img">`
+                    : `<div class="product-placeholder">No image</div>`;
+                return `
+                    <a href="/product/${p.id}" class="product-card">
+                        ${imgHtml}
+                        <span class="size-tag">SIZE ${escapeHtml(p.size)}</span>
+                        <div class="brand">${escapeHtml(p.brand)}</div>
+                        <h3>${escapeHtml(p.title)}</h3>
+                        <div class="price">${formatPrice(p.asking_price)}</div>
+                    </a>
+                `;
+            }).join('');
+        }
+        
+        function applyFilters() {
+            const filtered = allProducts.filter(p => {
+                if (activeCategory && p.category !== activeCategory) return false;
+                if (filters.size && p.size !== filters.size) return false;
+                if (filters.color && p.color !== filters.color) return false;
+                if (filters.minPrice != null && p.asking_price < filters.minPrice) return false;
+                if (filters.maxPrice != null && p.asking_price > filters.maxPrice) return false;
+                return true;
+            });
+            renderProducts(filtered);
+        }
+        
+        document.querySelectorAll('.browse-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                activeCategory = tab.dataset.category;
+                document.querySelectorAll('.browse-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                applyFilters();
+            });
+        });
+        
+        if (activeCategory) {
+            const tab = document.querySelector(`.browse-tab[data-category="${activeCategory}"]`);
+            if (tab) {
+                document.querySelectorAll('.browse-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            }
+        }
+        
+        function setGridMode(mode) {
+            viewMode = mode;
+            localStorage.setItem('thriftViewMode', mode);
+            grid.classList.remove('grid-large', 'grid-compact');
+            grid.classList.add('grid-' + mode);
+            document.querySelectorAll('.grid-toggle__btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.grid-toggle__btn[data-view="${mode}"]`).classList.add('active');
+        }
+        
+        document.querySelectorAll('.grid-toggle__btn').forEach(btn => {
+            btn.addEventListener('click', () => setGridMode(btn.dataset.view));
+        });
+        
+        setGridMode(viewMode);
+        
+        function openFilters() {
+            filterPanel.classList.add('active');
+            filterOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeFilters() {
+            filterPanel.classList.remove('active');
+            filterOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        
+        document.getElementById('filterToggle').addEventListener('click', openFilters);
+        document.getElementById('filterClose').addEventListener('click', closeFilters);
+        filterOverlay.addEventListener('click', closeFilters);
+        
+        function populateSelect(elementId, values, groupId) {
+            const select = document.getElementById(elementId);
+            if (!select) return;
+            if (!values.length) {
+                const group = document.getElementById(groupId);
+                if (group) group.style.display = 'none';
+                return;
+            }
+            values.forEach(v => {
+                const option = document.createElement('option');
+                option.value = v;
+                option.textContent = v;
+                select.appendChild(option);
+            });
+        }
+        
+        const sizes = [...new Set(allProducts.map(p => p.size).filter(Boolean))].sort();
+        const colors = [...new Set(allProducts.map(p => p.color).filter(Boolean))].sort();
+        
+        populateSelect('filterSize', sizes, 'groupSize');
+        populateSelect('filterColor', colors, 'groupColor');
+        
+        document.getElementById('filterApply').addEventListener('click', () => {
+            filters.size = document.getElementById('filterSize').value || null;
+            filters.color = document.getElementById('filterColor').value || null;
+            filters.minPrice = document.getElementById('priceMin').value ? Number(document.getElementById('priceMin').value) : null;
+            filters.maxPrice = document.getElementById('priceMax').value ? Number(document.getElementById('priceMax').value) : null;
+            applyFilters();
+            closeFilters();
+        });
+        
+        document.getElementById('filterClear').addEventListener('click', () => {
+            document.getElementById('filterSize').value = '';
+            document.getElementById('filterColor').value = '';
+            document.getElementById('priceMin').value = '';
+            document.getElementById('priceMax').value = '';
+            filters.size = null;
+            filters.color = null;
+            filters.minPrice = null;
+            filters.maxPrice = null;
+            applyFilters();
+        });
+        
+        applyFilters();
+    });
+</script>
 
 <section id="about" class="home-section">
     <h2>About Our Marketplace</h2>
@@ -94,15 +312,5 @@
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
   const db = getFirestore(app);
-
-  async function testConnection() {
-    try {
-      console.log("✅ Firebase connected successfully!");
-    } catch (error) {
-      console.error("❌ Firebase connection failed:", error);
-    }
-  }
-
-  testConnection();
 </script>
 {% endblock %}

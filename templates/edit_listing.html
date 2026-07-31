@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    .sell-form-box {
+    .edit-form-box {
         max-width: 650px;
         margin: 40px auto;
         background: white;
@@ -9,10 +9,10 @@
         padding: 40px;
         border-radius: 16px;
     }
-    .sell-form-group {
+    .edit-form-group {
         margin-bottom: 20px;
     }
-    .sell-form-group label {
+    .edit-form-group label {
         display: block;
         font-size: 11px;
         font-weight: 700;
@@ -21,7 +21,7 @@
         margin-bottom: 8px;
         letter-spacing: 0.5px;
     }
-    .sell-form-group input, .sell-form-group select, .sell-form-group textarea {
+    .edit-form-group input, .edit-form-group select, .edit-form-group textarea {
         width: 100%;
         padding: 12px;
         border: 1px solid #dcd7ce;
@@ -33,17 +33,17 @@
         outline: none;
         transition: border-color 0.2s ease;
     }
-    .sell-form-group input:focus, .sell-form-group select:focus, .sell-form-group textarea:focus {
+    .edit-form-group input:focus, .edit-form-group select:focus, .edit-form-group textarea:focus {
         border-color: #1c1c1c;
     }
-    .sell-form-row {
+    .edit-form-row {
         display: flex;
         gap: 16px;
     }
-    .sell-form-row .sell-form-group {
+    .edit-form-row .edit-form-group {
         flex: 1;
     }
-    .sell-section-title {
+    .edit-section-title {
         font-size: 13px;
         font-weight: 800;
         text-transform: uppercase;
@@ -82,7 +82,6 @@
         cursor: pointer;
         transition: border-color 0.2s ease, background 0.2s ease;
         background: #fbf9f6;
-        position: relative;
     }
     .img-drop-zone:hover, .img-drop-zone.drag-over {
         border-color: #1c1c1c;
@@ -191,123 +190,136 @@
     }
 
     @media (max-width: 768px) {
-        .sell-form-box { margin: 16px; padding: 24px; }
-        .sell-form-row { flex-direction: column; gap: 0; }
-        .sell-form-group { margin-bottom: 18px; }
+        .edit-form-box { margin: 16px; padding: 24px; }
+        .edit-form-row { flex-direction: column; gap: 0; }
+        .edit-form-group { margin-bottom: 18px; }
         .btn-submit { width: 100%; padding: 16px; font-size: 14px; }
-        .img-preview-grid {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-        }
+        .img-preview-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
         .img-drop-zone { padding: 28px 16px; }
     }
     @media (max-width: 480px) {
-        .img-preview-grid {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
+        .img-preview-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
     }
 </style>
 
-<div class="sell-form-box">
-    <h1 style="font-family: Georgia, serif; font-size: 36px; font-weight: 400; margin: 0 0 8px 0; color: #1c1c1c;">Start Selling</h1>
+<div class="edit-form-box">
+    <h1 style="font-family: Georgia, serif; font-size: 36px; font-weight: 400; margin: 0 0 8px 0; color: #1c1c1c;">Edit Listing</h1>
     <p style="font-size: 14px; color: #767676; margin-bottom: 32px; line-height: 1.6;">
-        Fill out the details below to display your pre-loved clothing or shoes on our marketplace.
+        Update your listing details below.
     </p>
 
-    <form action="/sell" method="POST" enctype="multipart/form-data" id="sellForm">
-        <div class="sell-section-title">Item Information</div>
+    <form action="/listing/{{ product.id }}/edit" method="POST" enctype="multipart/form-data" id="editForm">
+        <div class="edit-section-title">Item Information</div>
 
-        <div class="sell-form-group">
+        <div class="edit-form-group">
             <label>Item Title <span class="required-star">*</span></label>
-            <input type="text" name="title" required placeholder="e.g. Vintage Leather Jacket">
+            <input type="text" name="title" required value="{{ product.title }}">
         </div>
 
-        <div class="sell-form-row">
-            <div class="sell-form-group">
+        <div class="edit-form-row">
+            <div class="edit-form-group">
                 <label>Brand / Designer</label>
-                <input type="text" name="brand" placeholder="e.g. Custom Boutique">
+                <input type="text" name="brand" value="{{ product.brand or '' }}">
             </div>
-            <div class="sell-form-group">
+            <div class="edit-form-group">
                 <label>Category <span class="required-star">*</span></label>
                 <select name="category" id="categorySelect">
-                    <option value="Clothing">Clothing</option>
-                    <option value="Shoes">Shoes</option>
+                    <option value="Clothing" {% if product.category == 'Clothing' %}selected{% endif %}>Clothing</option>
+                    <option value="Shoes" {% if product.category == 'Shoes' %}selected{% endif %}>Shoes</option>
                 </select>
             </div>
         </div>
 
-        <div class="sell-form-row">
-            <div class="sell-form-group">
+        <div class="edit-form-row">
+            <div class="edit-form-group">
                 <label>Size <span class="required-star">*</span></label>
-                <input type="text" name="size" required placeholder="e.g. S, M, L">
+                <input type="text" name="size" required value="{{ product.size or '' }}">
             </div>
-            <div class="sell-form-group">
+            <div class="edit-form-group">
                 <label>Color <span class="required-star">*</span></label>
-                <input type="text" name="color" required placeholder="e.g. Black">
+                <input type="text" name="color" required value="{{ product.color or '' }}">
             </div>
         </div>
 
-        <div class="sell-section-title">Condition</div>
+        <div class="edit-section-title">Condition</div>
 
-        <div class="sell-form-row">
-            <div class="sell-form-group">
+        <div class="edit-form-row">
+            <div class="edit-form-group">
                 <label>Times Worn <span class="required-star">*</span></label>
-                <input type="number" name="times_worn" required min="0" placeholder="0">
+                <input type="number" name="times_worn" required min="0" value="{{ product.times_worn or 0 }}">
             </div>
-            <div class="sell-form-group">
+            <div class="edit-form-group">
                 <label>Tears / Stains</label>
                 <select name="has_tears" id="conditionDropdown">
-                    <option value="None - Perfect Condition">None - Perfect Condition</option>
-                    <option value="Minor loose threads only">Minor loose threads only</option>
-                    <option value="Yes, small interior tear">Yes, small interior tear</option>
+                    <option value="None - Perfect Condition" {% if product.has_tears == 'None - Perfect Condition' %}selected{% endif %}>None - Perfect Condition</option>
+                    <option value="Minor loose threads only" {% if product.has_tears == 'Minor loose threads only' %}selected{% endif %}>Minor loose threads only</option>
+                    <option value="Yes, small interior tear" {% if product.has_tears == 'Yes, small interior tear' %}selected{% endif %}>Yes, small interior tear</option>
                 </select>
             </div>
         </div>
 
-        <div class="sell-form-group">
+        <div class="edit-form-group">
             <label>Condition Description <span class="required-star">*</span></label>
-            <input type="text" name="seller_condition" required placeholder="e.g. Worn twice, perfectly clean condition">
+            <input type="text" name="seller_condition" required value="{{ product.seller_condition or '' }}">
         </div>
 
-        <div class="sell-section-title">Seller Information</div>
+        <div class="edit-section-title">Seller Information</div>
 
-        <div class="sell-form-row">
-            <div class="sell-form-group">
+        <div class="edit-form-row">
+            <div class="edit-form-group">
                 <label>City <span class="required-star">*</span></label>
-                <input type="text" name="seller_city" required placeholder="e.g. Lahore">
+                <input type="text" name="seller_city" required value="{{ seller_city or '' }}">
             </div>
-            <div class="sell-form-group">
+            <div class="edit-form-group">
                 <label>Province <span class="required-star">*</span></label>
-                <input type="text" name="seller_province" required placeholder="e.g. Punjab">
+                <input type="text" name="seller_province" required value="{{ seller_province or '' }}">
             </div>
         </div>
 
-        <div class="sell-form-group">
+        <div class="edit-form-group">
             <label>Area / Locality</label>
-            <input type="text" name="seller_locality" placeholder="e.g. DHA Phase 5">
+            <input type="text" name="seller_locality" value="{{ seller_locality or '' }}">
         </div>
 
-        <div class="sell-form-group">
+        <div class="edit-form-group">
             <label>Asking Price (Rs.) <span class="required-star">*</span></label>
-            <input type="number" name="asking_price" required placeholder="e.g. 1500">
+            <input type="number" name="asking_price" required value="{{ product.asking_price }}">
         </div>
 
-        <div class="sell-section-title">Photos</div>
+        <div class="edit-section-title">Photos</div>
 
-        <div class="sell-form-group">
-            <label>Upload Photos <span class="required-star">*</span></label>
+        <div class="edit-form-group">
+            <label>Current Photos</label>
+            <div class="img-preview-grid" id="existingPreviewGrid">
+                {% set existing_imgs = product_images %}
+                {% if not existing_imgs %}
+                <p style="font-size: 13px; color: #767676;">No photos uploaded yet.</p>
+                {% endif %}
+                {% for img in existing_imgs %}
+                <div class="img-preview-item">
+                    <img src="{{ build_image_url(img) }}" alt="" style="pointer-events: none;">
+                    {% if loop.first %}
+                    <span class="img-preview-item__cover">Cover</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="edit-form-group">
+            <label>Add More Photos</label>
             <div class="img-drop-zone" id="imgDropZone">
                 <div class="img-drop-zone__icon">+</div>
                 <p class="img-drop-zone__text">Drag photos here or click to browse</p>
-                <p class="img-drop-zone__subtext">Up to 8 images. JPG, PNG.</p>
+                <p class="img-drop-zone__subtext">Up to 8 total images. JPG, PNG.</p>
             </div>
             <input type="file" name="images" id="imgFileInput" accept="image/png,image/jpeg,image/jpg" multiple style="display:none;">
             <div class="img-preview-grid" id="imgPreviewGrid"></div>
             <div class="img-counter" id="imgCounter"></div>
+            <p style="font-size: 12px; color: #767676; margin-top: 6px;">Leave empty to keep existing photos.</p>
         </div>
 
-        <button type="submit" class="btn-submit" style="margin-top: 8px; width: 100%;">Submit Listing</button>
+        <button type="submit" class="btn-submit" style="margin-top: 8px; width: 100%;">Update Listing</button>
     </form>
 </div>
 
@@ -315,19 +327,20 @@
 (function() {
     'use strict';
 
-    const MAX_IMAGES = 8;
-    const dropZone = document.getElementById('imgDropZone');
-    const fileInput = document.getElementById('imgFileInput');
-    const previewGrid = document.getElementById('imgPreviewGrid');
-    const imgCounter = document.getElementById('imgCounter');
-    const sellForm = document.getElementById('sellForm');
+    var MAX_IMAGES = 8;
+    var dropZone = document.getElementById('imgDropZone');
+    var fileInput = document.getElementById('imgFileInput');
+    var previewGrid = document.getElementById('imgPreviewGrid');
+    var imgCounter = document.getElementById('imgCounter');
+    var editForm = document.getElementById('editForm');
 
-    let images = [];
-    let draggedIdx = null;
-    let dragOverIdx = null;
+    var existingCount = document.querySelectorAll('#existingPreviewGrid .img-preview-item').length;
+    var images = [];
+    var draggedIdx = null;
 
     function updateCounter() {
-        imgCounter.textContent = images.length + ' / ' + MAX_IMAGES + ' photos';
+        var total = existingCount + images.length;
+        imgCounter.textContent = total + ' / ' + MAX_IMAGES + ' photos';
     }
 
     function getFileDataUrl(file) {
@@ -351,13 +364,6 @@
             imgEl.src = img.preview;
             imgEl.alt = '';
             item.appendChild(imgEl);
-
-            if (idx === 0) {
-                var badge = document.createElement('span');
-                badge.className = 'img-preview-item__cover';
-                badge.textContent = 'Cover';
-                item.appendChild(badge);
-            }
 
             var removeBtn = document.createElement('button');
             removeBtn.type = 'button';
@@ -441,7 +447,7 @@
         });
         if (!files.length) return;
 
-        var remaining = MAX_IMAGES - images.length;
+        var remaining = MAX_IMAGES - (existingCount + images.length);
         if (remaining <= 0) {
             return;
         }
@@ -460,7 +466,7 @@
     }
 
     dropZone.addEventListener('click', function() {
-        if (images.length >= MAX_IMAGES) return;
+        if ((existingCount + images.length) >= MAX_IMAGES) return;
         fileInput.click();
     });
 
@@ -490,20 +496,22 @@
         }
     });
 
-    sellForm.addEventListener('submit', function(e) {
-        if (images.length === 0) {
+    editForm.addEventListener('submit', function(e) {
+        if (images.length === 0 && existingCount === 0) {
             e.preventDefault();
             alert('Please upload at least one photo.');
             return;
         }
-        var dt = new DataTransfer();
-        images.forEach(function(img) {
-            dt.items.add(img.file);
-        });
-        fileInput.files = dt.files;
+        if (images.length > 0) {
+            var dt = new DataTransfer();
+            images.forEach(function(img) {
+                dt.items.add(img.file);
+            });
+            fileInput.files = dt.files;
+        }
     });
 
-    renderPreviews();
+    updateCounter();
 })();
 </script>
 {% endblock %}

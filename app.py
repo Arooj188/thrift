@@ -1,5 +1,6 @@
 import importlib
 import json
+import logging
 import os
 import sqlite3
 import firebase_admin
@@ -8,6 +9,7 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from urllib.parse import quote
 from ai_service import analyze_item
 
 # CLOUDINARY IMPORTS (optional for local development)
@@ -42,20 +44,12 @@ app.config.update({
 app.permanent_session_lifetime = timedelta(days=int(os.environ.get('SESSION_DAYS', '7')))
 
 if app.secret_key == 'super_secret_production_key_98765':
-    print('WARNING: Using default SECRET_KEY. Set SECRET_KEY env var for production.')
+    logging.warning('Using default SECRET_KEY. Set SECRET_KEY env var for production.')
 app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
-
-PLATFORM_COMMISSION_RATE = 0.10
-DELIVERY_CHARGES = 0.00
-SUPPORTED_PAYMENT_METHODS = ['Online Payment', 'Bank Transfer']
-COURIER_OPTIONS = ['TCS', 'Leopards', 'M&P Courier']
-ORDER_STATUSES = ['Order Placed', 'Preparing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled']
 
 def dict_factory(cursor, row):
     return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
@@ -274,13 +268,16 @@ def ensure_schema():
         ("seller_rating", "REAL DEFAULT 0.0"),
         ("total_sales", "INTEGER DEFAULT 0"),
         ("is_admin", "INTEGER DEFAULT 0"),
+        ("contact_preference", "TEXT DEFAULT 'whatsapp'"),
+        ("contact_phone", "TEXT DEFAULT ''"),
+        ("contact_email", "TEXT DEFAULT ''"),
     ]
     for column_name, definition in user_columns:
         if not schema_has_column(conn, 'users', column_name):
-            try:
-                cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {definition}")
-            except Exception:
-                pass
+             try:
+                 cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {definition}")
+             except Exception:
+                 pass
 
     product_columns = [
         ("description", "TEXT"),
@@ -352,24 +349,34 @@ def ensure_schema():
     except Exception:
         pass
 
+    try:
+        cursor.execute("UPDATE users SET contact_preference = 'whatsapp' WHERE contact_preference IS NULL")
+    except Exception:
+        pass
+    try:
+        cursor.execute("UPDATE users SET contact_phone = phone WHERE contact_phone IS NULL OR contact_phone = ''")
+    except Exception:
+        pass
+    try:
+        cursor.execute("UPDATE users SET contact_email = email WHERE contact_email IS NULL OR contact_email = ''")
+    except Exception:
+        pass
+
     conn.commit()
     conn.close()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg'}
 
-def get_clean_cart_ids():
-    current_cart = session.get('cart', [])
-    clean_ids = []
-    for item in current_cart:
-        try:
-            clean_ids.append(int(item))
-        except (TypeError, ValueError):
-            continue
-    clean_ids = list(dict.fromkeys(clean_ids))
-    session['cart'] = clean_ids
-    return clean_ids
-
+def normalize_phone(raw_phone: str) -> str:
+    if not raw_phone:
+        return ''
+    digits = ''.join(ch for ch in str(raw_phone) if ch.isdigit())
+    if not digits:
+        return ''
+    if digits.startswith('0'):
+        return '92' + digits[1:]
+    return digits
 
 def validate_email(email: str) -> bool:
     import re
@@ -394,50 +401,6 @@ def sanitize_input(s: str, max_len: int = 1024) -> str:
     s = s.strip()
     return s[:max_len]
 
-def calculate_order_totals(amount):
-    commission = round(amount * PLATFORM_COMMISSION_RATE, 2)
-    seller_earnings = round(amount - commission, 2)
-    total_buyer_pays = round(amount + DELIVERY_CHARGES, 2)
-    return {
-        'product_price': round(amount, 2),
-        'delivery_charges': DELIVERY_CHARGES,
-        'total_buyer_pays': total_buyer_pays,
-        'platform_commission': commission,
-        'seller_earnings': seller_earnings,
-    }
-
-def get_status_progress(current_status):
-    if current_status == 'Cancelled':
-        return {'steps': ORDER_STATUSES[:-1], 'current_index': -1, 'is_cancelled': True}
-    status_order = ORDER_STATUSES[:-1]
-    try:
-        current_index = status_order.index(current_status)
-        return {'steps': status_order, 'current_index': current_index, 'is_cancelled': False}
-    except ValueError:
-        return None
-
-def get_cart_products():
-    cart_ids = get_clean_cart_ids()
-    if not cart_ids:
-        return []
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    placeholders = ','.join('?' for _ in cart_ids)
-    cursor.execute(f"SELECT * FROM Products WHERE id IN ({placeholders}) AND status = 'available'", cart_ids)
-    products = cursor.fetchall()
-    conn.close()
-    
-    # Remove stale product IDs from session cart
-    valid_ids = {p['id'] for p in products}
-    current_cart = get_clean_cart_ids()
-    new_cart = [pid for pid in current_cart if pid in valid_ids]
-    if len(new_cart) != len(current_cart):
-        session['cart'] = new_cart
-    
-    return products
-
-
-
 def save_uploaded_images(files):
     saved_paths = []
     for image_file in files:
@@ -457,10 +420,25 @@ def save_uploaded_images(files):
                 image_file.save(save_path)
                 saved_paths.append(f"uploads/{unique_name}")
             except Exception as e:
-                print(f"Image upload error: {e}")
+                logging.error(f"Image upload error: {e}")
                 continue
     return saved_paths
 
+
+
+def find_user_by_email_firestore(email):
+    db = _get_firestore_db()
+    if db is None:
+        return None
+    try:
+        docs = db.collection('users').where('email', '==', email).stream()
+        for doc in docs:
+            data = doc.to_dict()
+            data['user_id'] = int(doc.id) if doc.id.isdigit() else doc.id
+            return data
+    except Exception:
+        pass
+    return None
 
 
 def get_product_by_id(product_id):
@@ -540,7 +518,6 @@ def is_admin_user():
     admin_email = os.environ.get('ADMIN_EMAIL')
     if not user:
         return False
-    # Check explicit is_admin flag if present, otherwise fallback to ADMIN_EMAIL match
     try:
         if user.get('is_admin'):
             return True
@@ -550,98 +527,41 @@ def is_admin_user():
         return True
     return False
 
+
+def require_admin():
+    if 'user_id' not in session:
+        flash('Admin login required.', 'error')
+        return redirect(url_for('login'))
+    if not is_admin_user():
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    return None
+
 try:
     init_db()
     ensure_schema()
 except Exception as e:
-    print(f"Database initialization status: {e}")
-
-def _send_email_via_resend(to_email, subject, html_content):
-    try:
-        import resend
-        resend.api_key = RESEND_API_KEY
-        params = {
-            "from": "Thrift Marketplace <noreply@thrift.pk>",
-            "to": [to_email],
-            "subject": subject,
-            "html": html_content,
-        }
-        result = resend.Emails.send(params)
-        return result
-    except Exception as e:
-        print(f"Email send error: {e}")
-        return None
-
-def send_buyer_email(to_email, buyer_name, item_title, price, tracking_number, destination, payment_method):
-    subject = f"Order Confirmed: {item_title}"
-    html = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1c1c1c;">
-        <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 16px;">Order Confirmed</h1>
-        <p style="font-size: 14px; line-height: 1.6; color: #555;">Dear {buyer_name},</p>
-        <p style="font-size: 14px; line-height: 1.6; color: #555;">Your order on thrift has been placed successfully!</p>
-        <div style="background: #f2efea; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Item:</strong> {item_title}</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Total Paid:</strong> Rs. {price:.2f}</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Payment Method:</strong> {payment_method}</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Tracking Number:</strong> {tracking_number}</p>
-            <p style="margin: 0; font-size: 14px;"><strong>Shipping To:</strong> {destination}</p>
-        </div>
-        <p style="font-size: 13px; color: #767676;">Thank you for shopping with us.</p>
-    </div>
-    """
-    if RESEND_API_KEY:
-        return _send_email_via_resend(to_email, subject, html)
-    else:
-        print("\n" + "="*60)
-        print(f"[CONSOLE EMAIL OUTBOX] BUYER NOTIFICATION")
-        print(f"TO: {to_email}")
-        print(f"SUBJECT: {subject}")
-        print(f"ITEM: {item_title} | PRICE: Rs. {price:.2f}")
-        print(f"TRACKING: {tracking_number} | DEST: {destination}")
-        print("="*60 + "\n")
-        return None
-
-def send_seller_email(to_email, seller_name, item_title, buyer_name, buyer_phone, buyer_address, tracking_number):
-    subject = f"New Order Received: {item_title}"
-    html = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1c1c1c;">
-        <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 16px;">New Order Received</h1>
-        <p style="font-size: 14px; line-height: 1.6; color: #555;">Dear {seller_name},</p>
-        <p style="font-size: 14px; line-height: 1.6; color: #555;">Your item has been purchased on thrift!</p>
-        <div style="background: #f2efea; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Item:</strong> {item_title}</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Buyer:</strong> {buyer_name}</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Buyer Phone:</strong> {buyer_phone}</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Shipping Address:</strong> {buyer_address}</p>
-            <p style="margin: 0; font-size: 14px;"><strong>Tracking Number:</strong> {tracking_number}</p>
-        </div>
-        <p style="font-size: 13px; color: #767676;">Please prepare the item for shipment.</p>
-    </div>
-    """
-    if RESEND_API_KEY:
-        return _send_email_via_resend(to_email, subject, html)
-    else:
-        print("\n" + "="*60)
-        print(f"[CONSOLE EMAIL OUTBOX] SELLER NOTIFICATION")
-        print(f"TO: {to_email}")
-        print(f"SUBJECT: {subject}")
-        print(f"ITEM: {item_title} | BUYER: {buyer_name}")
-        print(f"BUYER PHONE: {buyer_phone} | ADDRESS: {buyer_address}")
-        print(f"TRACKING: {tracking_number}")
-        print("="*60 + "\n")
-        return None
+    logging.error(f"Database initialization status: {e}")
 
 @app.before_request
 def ensure_cart_exists():
     if 'cart' not in session:
         session['cart'] = []
-    get_clean_cart_ids()
 
 @app.route('/')
 def index():
     category = request.args.get('category')
     products = get_products_from_firestore(category=category)
-    return render_template('index.html', products=products, selected_category=category)
+    safe_products = []
+    for p in products:
+        safe = {}
+        for k, v in p.items():
+            if hasattr(v, 'isoformat'):
+                safe[k] = v.isoformat()
+            else:
+                safe[k] = v
+        safe_products.append(safe)
+    return render_template('index.html', products=safe_products, selected_category=category or '')
 
 @app.route('/how-it-works')
 def how_it_works():
@@ -669,154 +589,33 @@ def product_details(product_id):
     for q in questions:
         qrows = cur.execute('SELECT a.answer_id, a.content, a.created_at, u.name as answerer FROM answers a LEFT JOIN users u ON a.user_id = u.user_id WHERE a.question_id = ? ORDER BY a.created_at ASC', (q['question_id'],)).fetchall()
         q['answers'] = [dict(ar) for ar in qrows]
+
+    seller_phone = ''
+    seller_email = ''
+    seller_contact_preference = 'whatsapp'
+    seller_id = product.get('seller_id')
+    if seller_id:
+        seller_row = cur.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
+        if seller_row:
+            seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
+            seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
+            seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
+
+    whatsapp_url = ''
+    gmail_url = ''
+    mailto_url = ''
+    if product.get('title'):
+        if seller_phone and seller_contact_preference == 'whatsapp':
+            text = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
+            whatsapp_url = f"https://wa.me/{seller_phone}?text={quote(text)}"
+        elif seller_email and seller_contact_preference == 'email':
+            subject = f"Interest in {product['title']}"
+            body = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
+            gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(seller_email)}&su={quote(subject)}&body={quote(body)}"
+            mailto_url = f"mailto:{seller_email}?subject={quote(subject)}&body={quote(body)}"
+
     conn.close()
-    return render_template('product_details.html', product=product, image_list=image_list, questions=questions)
-
-@app.route('/cart/add/<int:product_id>', methods=['POST'])
-def add_to_cart(product_id):
-    product = get_product_by_id(product_id)
-    if not product or product.get('status') != 'available':
-        flash('This item is no longer available.')
-        return redirect(url_for('index'))
-    
-    cart_ids = get_clean_cart_ids()
-    if product_id not in cart_ids:
-        cart_ids.append(product_id)
-        session['cart'] = cart_ids
-        flash("Item added to cart!")
-    return redirect(url_for('view_cart'))
-
-@app.route('/cart')
-def view_cart():
-    products = get_cart_products()
-    if not products:
-        return render_template('cart.html', products=[], total=0)
-    total = sum(p['asking_price'] for p in products)
-    return render_template('cart.html', products=products, total=total)
-
-@app.route('/cart/remove/<int:product_id>')
-def remove_from_cart(product_id):
-    current_cart = list(session['cart'])
-    if product_id in current_cart:
-        current_cart.remove(product_id)
-        session['cart'] = current_cart
-        flash("Item removed.")
-    return redirect(url_for('view_cart'))
-
-@app.route('/checkout')
-def checkout():
-    if 'user_id' not in session:
-        flash('Please log in before checking out.')
-        return redirect(url_for('login'))
-
-    products = get_cart_products()
-    if not products:
-        flash('Your cart is empty or items are no longer available.')
-        return redirect(url_for('index'))
-
-    total = sum(p['asking_price'] for p in products)
-    totals = calculate_order_totals(total)
-
-    user = None
-    if 'user_id' in session:
-        conn_user = get_db_connection()
-        cur_user = conn_user.cursor()
-        row = cur_user.execute('SELECT name, email, phone, street_address, city, province, postal_code FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-        user = dict(row) if row else None
-        conn_user.close()
-
-    return render_template('checkout.html', products=products, totals=totals, user=user)
-
-
-@app.route('/place_order', methods=['POST'])
-def place_order():
-    if 'user_id' not in session:
-        flash('You must be logged in to place an order.')
-        return redirect(url_for('login'))
-
-    buyer_name = request.form.get('buyer_name', '').strip()
-    buyer_phone = request.form.get('buyer_phone', '').strip()
-    street = request.form.get('buyer_address_street', '').strip()
-    city = request.form.get('buyer_city', '').strip()
-    shipping_company = request.form.get('shipping_company', '').strip()
-    payment_method = request.form.get('payment_method', '').strip()
-    delivery_note = request.form.get('delivery_note', '').strip()
-
-    required_fields = [buyer_name, buyer_phone, street, city, shipping_company, payment_method]
-    if not all(required_fields):
-        flash('Please complete all required shipping and payment fields before placing your order.')
-        return redirect(url_for('checkout'))
-
-    if payment_method not in SUPPORTED_PAYMENT_METHODS:
-        flash('Invalid payment method selected.')
-        return redirect(url_for('checkout'))
-
-    buyer_email = request.form.get('buyer_email', '').strip()
-    if not buyer_email:
-        conn_temp = get_db_connection()
-        cur_temp = conn_temp.cursor()
-        row = cur_temp.execute('SELECT email FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-        buyer_email = row.get('email') if row else ''
-        conn_temp.close()
-
-    products = get_cart_products()
-    if not products:
-        flash('Your cart is empty or all items are unavailable.')
-        return redirect(url_for('index'))
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    buyer_id = session['user_id']
-    for product in products:
-        if product['status'] != 'available':
-            continue
-
-        seller_id = product['seller_id']
-        amount = float(product['asking_price'])
-        totals = calculate_order_totals(amount)
-        tracking_num = f"TRK{product['id']}{int(datetime.utcnow().timestamp())}PK"
-
-        cursor.execute('''
-            INSERT INTO orders (product_id, buyer_id, seller_id, status, buyer_name, buyer_email, buyer_phone,
-                buyer_street_address, buyer_city, buyer_province, buyer_postal_code, delivery_note, tracking_number,
-                seller_amount, platform_commission, order_total, payout_status, payout_date, payment_date,
-                delivery_charges, payment_method, shipping_company)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            product['id'], buyer_id, seller_id, 'Order Placed', buyer_name, buyer_email, buyer_phone,
-            street, city, '', '', delivery_note, tracking_num,
-            totals['seller_earnings'], totals['platform_commission'], totals['total_buyer_pays'], 'Pending', None, datetime.utcnow(),
-            totals['delivery_charges'], payment_method, shipping_company,
-        ))
-        order_id = cursor.lastrowid
-        cursor.execute('UPDATE Products SET status=?, tracking_number=?, order_id=? WHERE id=?',
-                       ('sold', tracking_num, order_id, product['id']))
-
-        send_buyer_email(buyer_email, buyer_name, product['title'], totals['total_buyer_pays'], tracking_num, f"{street}, {city}", payment_method)
-
-        seller_info = None
-        conn_temp2 = get_db_connection()
-        cur_temp2 = conn_temp2.cursor()
-        row = cur_temp2.execute('SELECT name, email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
-        seller_info = dict(row) if row else None
-        conn_temp2.close()
-
-        if seller_info:
-            send_seller_email(
-                seller_info['email'],
-                seller_info['name'],
-                product['title'],
-                buyer_name,
-                buyer_phone,
-                f"{street}, {city} | {delivery_note or 'No special instructions'}",
-                tracking_num
-            )
-
-    conn.commit()
-    conn.close()
-    session['cart'] = []
-    flash('Order placed successfully. Your purchase is now recorded with platform commission tracking.')
-    return redirect(url_for('index'))
+    return render_template('product_details.html', product=product, image_list=image_list, questions=questions, seller_phone=seller_phone, seller_email=seller_email, seller_contact_preference=seller_contact_preference, whatsapp_url=whatsapp_url, gmail_url=gmail_url, mailto_url=mailto_url)
 
 @app.route('/sell', methods=['GET', 'POST'])
 def sell():
@@ -836,7 +635,13 @@ def sell():
         times_worn = request.form['times_worn']
         has_tears = request.form['has_tears']
         seller_condition = request.form['seller_condition'].strip()
-        seller_address = request.form['seller_address'].strip()
+        seller_city = request.form.get('seller_city', '').strip()
+        seller_province = request.form.get('seller_province', '').strip()
+        seller_locality = request.form.get('seller_locality', '').strip()
+        if seller_locality:
+            seller_address = f"{seller_locality}, {seller_city}, {seller_province}"
+        else:
+            seller_address = f"{seller_city}, {seller_province}"
         asking_price = float(request.form['asking_price'])
         image_files = request.files.getlist('images') or []
         if not image_files:
@@ -867,8 +672,36 @@ def sell():
             INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id']))
+        product_id = cursor.lastrowid
         conn.commit()
         conn.close()
+
+        db = _get_firestore_db()
+        if db is not None:
+            try:
+                product_data = {
+                    'title': title,
+                    'brand': brand,
+                    'category': category,
+                    'size': size,
+                    'color': color,
+                    'gender': gender,
+                    'asking_price': asking_price,
+                    'image_url': image_url,
+                    'images': images_json,
+                    'description': description,
+                    'tags': tags,
+                    'times_worn': int(times_worn),
+                    'seller_condition': seller_condition,
+                    'has_tears': has_tears,
+                    'seller_address': seller_address,
+                    'condition_summary': condition_summary,
+                    'seller_id': session['user_id'],
+                    'status': 'available',
+                }
+                db.collection('Products').document(str(product_id)).set(product_data)
+            except Exception:
+                pass
 
         flash('Your thrift item has been successfully listed!')
         return redirect(url_for('seller_listings'))
@@ -899,6 +732,13 @@ def delete_listing(product_id):
     if not product or product['seller_id'] != session['user_id']:
         flash('Unable to delete the listing.')
         return redirect(url_for('seller_listings'))
+
+    db = _get_firestore_db()
+    if db is not None:
+        try:
+            db.collection('Products').document(str(product_id)).delete()
+        except Exception:
+            pass
 
     # attempt to remove local image files if present
     try:
@@ -931,295 +771,265 @@ def delete_listing(product_id):
     conn.commit()
     conn.close()
     
-    # Remove from any active session cart to prevent stale references
-    if 'cart' in session:
-        current_cart = list(session['cart'])
-        if product_id in current_cart:
-            current_cart.remove(product_id)
-            session['cart'] = current_cart
-    
     flash('Listing deleted successfully.')
     return redirect(url_for('seller_listings'))
 
 
-@app.route('/listing/<int:product_id>/mark_sold', methods=['POST'])
-def mark_sold(product_id):
+@app.route('/listing/<int:product_id>/edit', methods=['GET', 'POST'])
+def edit_listing(product_id):
     if 'user_id' not in session:
-        flash('Please log in to manage your listing.')
+        flash('Please log in to edit your listing.')
         return redirect(url_for('login'))
 
     product = get_product_by_id(product_id)
     if not product or product['seller_id'] != session['user_id']:
-        flash('Unable to mark this listing as sold.')
+        flash('Listing not found or you do not have permission to edit it.')
         return redirect(url_for('seller_listings'))
 
-    # Manual marking as sold is not permitted. Items become sold automatically after successful purchase.
-    flash('Manual marking as sold is not allowed. Items become sold only after a successful purchase through the site.')
-    return redirect(url_for('seller_listings'))
+    seller_address = product.get('seller_address', '') or ''
+    parts = [p.strip() for p in seller_address.split(',')]
+    if len(parts) == 3:
+        seller_locality, seller_city, seller_province = parts
+    elif len(parts) == 2:
+        seller_city, seller_province = parts
+        seller_locality = ''
+    else:
+        seller_city = seller_address
+        seller_province = ''
+        seller_locality = ''
+
+    product_images = []
+    if product.get('images'):
+        try:
+            product_images = json.loads(product['images']) if isinstance(product['images'], str) else product['images']
+        except Exception:
+            product_images = [product['images']] if product.get('image_url') else []
+    elif product.get('image_url'):
+        product_images = [product['image_url']]
+
+    if request.method == 'POST':
+        title = request.form['title'].strip()
+        brand = request.form['brand'].strip()
+        category = request.form['category']
+        size = request.form['size'].strip()
+        color = request.form['color'].strip()
+        gender = request.form.get('gender', '').strip()
+        tags = request.form.get('tags', '').strip()
+        description = request.form.get('description', '').strip()
+        times_worn = request.form['times_worn']
+        has_tears = request.form['has_tears']
+        seller_condition = request.form['seller_condition'].strip()
+        seller_city = request.form.get('seller_city', '').strip()
+        seller_province = request.form.get('seller_province', '').strip()
+        seller_locality = request.form.get('seller_locality', '').strip()
+        if seller_locality:
+            seller_address = f"{seller_locality}, {seller_city}, {seller_province}"
+        else:
+            seller_address = f"{seller_city}, {seller_province}"
+        asking_price = float(request.form['asking_price'])
+        image_files = request.files.getlist('images')
+
+        image_paths = save_uploaded_images(image_files)
+        existing_images = []
+        if product.get('images'):
+            try:
+                existing_images = json.loads(product['images']) if isinstance(product['images'], str) else product['images']
+            except Exception:
+                existing_images = [product['images']] if product.get('image_url') else []
+        elif product.get('image_url'):
+            existing_images = [product['image_url']]
+        new_images = existing_images + image_paths
+        images_json = json.dumps(new_images)
+        image_url = image_paths[0] if image_paths else product.get('image_url', '')
+
+        condition_summary = product.get('condition_summary', '')
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE Products SET title=?, brand=?, category=?, size=?, color=?, gender=?, asking_price=?,
+                image_url=?, images=?, description=?, tags=?, times_worn=?, seller_condition=?,
+                has_tears=?, seller_address=?, condition_summary=?
+            WHERE id=?
+        ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, product_id))
+        conn.commit()
+        conn.close()
+
+        db = _get_firestore_db()
+        if db is not None:
+            try:
+                product_data = {
+                    'title': title,
+                    'brand': brand,
+                    'category': category,
+                    'size': size,
+                    'color': color,
+                    'gender': gender,
+                    'asking_price': asking_price,
+                    'image_url': image_url,
+                    'images': images_json,
+                    'description': description,
+                    'tags': tags,
+                    'times_worn': int(times_worn),
+                    'seller_condition': seller_condition,
+                    'has_tears': has_tears,
+                    'seller_address': seller_address,
+                    'condition_summary': condition_summary,
+                    'seller_id': session['user_id'],
+                    'status': product.get('status', 'available'),
+                }
+                db.collection('Products').document(str(product_id)).set(product_data)
+            except Exception:
+                pass
+
+        flash('Listing updated successfully.')
+        return redirect(url_for('seller_listings'))
+
+    return render_template('edit_listing.html', product=product, seller_city=seller_city, seller_province=seller_province, seller_locality=seller_locality, product_images=product_images)
 
 
-@app.route('/orders', methods=['GET', 'POST'])
-def track_orders():
+@app.route('/account', methods=['GET', 'POST'])
+def account_settings():
     if 'user_id' not in session:
-        flash('Please log in to view your orders.')
+        flash('Please log in to update your account settings.')
         return redirect(url_for('login'))
 
-    orders = []
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-            p.image_url, p.images,
-            o.buyer_name, o.buyer_email, o.buyer_phone
-        FROM orders o
-        JOIN Products p ON o.product_id = p.id
-        WHERE o.buyer_id = ?
-        ORDER BY o.order_date DESC
-    ''', (session['user_id'],))
-    orders = [dict(row) for row in cursor.fetchall()]
+    user = cursor.execute('SELECT name, email, phone, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
     conn.close()
 
-    for order in orders:
-        order['progress'] = get_status_progress(order.get('status', ''))
+    if not user:
+        flash('Account not found.')
+        return redirect(url_for('index'))
 
-    return render_template('orders.html', orders=orders)
+    user = dict(user)
+    contact_preference = user.get('contact_preference', 'whatsapp') or 'whatsapp'
+    contact_phone = user.get('contact_phone', '') or user.get('phone', '')
+    contact_email = user.get('contact_email', '') or user.get('email', '')
+
+    if request.method == 'POST':
+        contact_preference = request.form.get('contact_preference', 'whatsapp')
+        if contact_preference not in ('whatsapp', 'email'):
+            contact_preference = 'whatsapp'
+
+        contact_phone = sanitize_input(request.form.get('contact_phone', ''))
+        contact_email = sanitize_input(request.form.get('contact_email', '')).lower()
+
+        phone_error = ''
+        email_error = ''
+        general_error = ''
+
+        if contact_preference == 'whatsapp':
+            if not contact_phone:
+                phone_error = 'Phone number is required for WhatsApp contact.'
+        elif contact_preference == 'email':
+            if not contact_email:
+                email_error = 'Email address is required for email contact.'
+            elif not validate_email(contact_email):
+                email_error = 'Please provide a valid email address.'
+
+        if not any([phone_error, email_error, general_error]):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE users SET contact_preference = ?, contact_phone = ?, contact_email = ? WHERE user_id = ?', (contact_preference, contact_phone, contact_email, session['user_id']))
+            conn.commit()
+            conn.close()
+
+            db = _get_firestore_db()
+            if db is not None:
+                try:
+                    db.collection('users').document(str(session['user_id'])).set({
+                        'contact_preference': contact_preference,
+                        'contact_phone': contact_phone,
+                        'contact_email': contact_email,
+                    }, merge=True)
+                except Exception:
+                    pass
+
+            flash('Contact preferences updated successfully.')
+            return redirect(url_for('account_settings'))
+
+        conn.close()
+    else:
+        phone_error = ''
+        email_error = ''
+        general_error = ''
+
+    return render_template('account_settings.html', user=user, contact_preference=contact_preference, contact_phone=contact_phone, contact_email=contact_email, phone_error=phone_error, email_error=email_error, general_error=general_error)
 
 
 @app.route('/admin')
 def admin_dashboard():
-    if not is_admin_user():
-        flash('Admin access required.')
-        return redirect(url_for('index'))
+    guard = require_admin()
+    if guard is not None:
+        return guard
     
-    section = request.args.get('section', 'dashboard')
+    section = request.args.get('section', 'listings')
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    orders = [dict(row) for row in cursor.execute('''
-        SELECT o.*, p.title AS product_title, p.asking_price AS product_price,
-            s.name AS seller_name, s.phone AS seller_phone, s.email AS seller_email,
-            b.name AS buyer_name, b.email AS buyer_email, b.phone AS buyer_phone
-        FROM orders o
-        LEFT JOIN Products p ON o.product_id = p.id
-        LEFT JOIN users s ON o.seller_id = s.user_id
-        LEFT JOIN users b ON o.buyer_id = b.user_id
-        ORDER BY o.order_date DESC
-    ''').fetchall()]
-    
-    users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
-    
     listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
-    
-    category_stats = [dict(row) for row in cursor.execute('''
-        SELECT category, COUNT(*) as count FROM Products 
-        WHERE status = 'sold' AND category IS NOT NULL 
-        GROUP BY category ORDER BY count DESC
-    ''').fetchall()]
-    
+    users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
+    listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
+    listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
     conn.close()
-    
-    total_revenue = round(sum(item.get('order_total', 0) or item.get('product_price', 0) or 0 for item in orders), 2)
-    total_commission = round(sum(item.get('platform_commission', 0) or 0 for item in orders), 2)
-    total_seller_payouts = round(sum(item.get('seller_amount', 0) or 0 for item in orders), 2)
-    pending_payouts = sum(1 for item in orders if item.get('payout_status') == 'Pending')
     
     return render_template('admin_dashboard.html',
         section=section,
-        orders=orders,
-        users=users,
         listings=listings,
-        total_revenue=total_revenue,
-        total_commission=total_commission,
-        total_seller_payouts=total_seller_payouts,
-        pending_payouts=pending_payouts,
-        category_stats=category_stats,
+        users=users,
+        listing_counts=listing_counts,
         current_admin_id=session.get('user_id')
     )
 
-@app.route('/admin-portal')
-def admin_portal():
-    return redirect(url_for('admin_dashboard', section='dashboard'))
-
-@app.route('/admin/users')
-def admin_users():
-    return redirect(url_for('admin_dashboard', section='users'))
-
-@app.route('/admin/listings')
-def admin_listings():
-    return redirect(url_for('admin_dashboard', section='listings'))
-
-@app.route('/admin/orders')
-def admin_orders():
-    return redirect(url_for('admin_dashboard', section='orders'))
-
-
-@app.route('/seller/orders')
-def seller_orders():
-    if 'user_id' not in session:
-        flash('Please log in to view your seller orders.')
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-            p.image_url, p.images, p.asking_price
-        FROM orders o
-        JOIN Products p ON o.product_id = p.id
-        WHERE o.seller_id = ?
-        ORDER BY o.order_date DESC
-    ''', (session['user_id'],))
-    orders = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-
-    for order in orders:
-        order['progress'] = get_status_progress(order.get('status', ''))
-        if not order.get('platform_commission') and order.get('asking_price'):
-            totals = calculate_order_totals(float(order['asking_price']))
-            order['platform_commission'] = totals['platform_commission']
-            order['seller_amount'] = totals['seller_earnings']
-            order['order_total'] = totals['total_buyer_pays']
-
-    return render_template('seller_orders.html', orders=orders)
-
-
-@app.route('/order/<int:order_id>')
-def order_detail(order_id):
-    if 'user_id' not in session:
-        flash('Please log in to view order details.')
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    order = cursor.execute('''
-        SELECT o.*, p.title AS product_title, p.brand, p.color, p.size, p.category,
-            p.image_url, p.images, p.asking_price, p.seller_id
-        FROM orders o
-        JOIN Products p ON o.product_id = p.id
-        WHERE o.order_id = ?
-    ''', (order_id,)).fetchone()
-    order = dict(order) if order else None
-    conn.close()
-
-    if not order:
-        flash('Order not found.')
-        return redirect(url_for('index'))
-
-    is_buyer = order['buyer_id'] == session['user_id']
-    is_seller = order['seller_id'] == session['user_id']
-    if not is_buyer and not is_seller:
-        flash('You do not have access to this order.')
-        return redirect(url_for('index'))
-
-    order['progress'] = get_status_progress(order.get('status', ''))
-    if not order.get('platform_commission') and order.get('asking_price'):
-        totals = calculate_order_totals(float(order['asking_price']))
-        order['platform_commission'] = totals['platform_commission']
-        order['seller_amount'] = totals['seller_earnings']
-        order['order_total'] = totals['total_buyer_pays']
-
-    return render_template('order_detail.html', order=order, is_buyer=is_buyer, is_seller=is_seller)
-
-
-@app.route('/seller/order/<int:order_id>/update', methods=['POST'])
-def seller_update_order(order_id):
-    if 'user_id' not in session:
-        flash('Please log in to update orders.')
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    order = cursor.execute('SELECT seller_id FROM orders WHERE order_id = ?', (order_id,)).fetchone()
-    order = dict(order) if order else None
-
-    if not order or order['seller_id'] != session['user_id']:
-        flash('You can only update your own orders.')
-        return redirect(url_for('seller_orders'))
-
-    new_status = sanitize_input(request.form.get('status', ''))
-    courier_company = sanitize_input(request.form.get('courier_company', ''))
-    tracking_number = sanitize_input(request.form.get('tracking_number', ''))
-
-    if new_status and new_status in ORDER_STATUSES:
-        cursor.execute('UPDATE orders SET status = ? WHERE order_id = ?', (new_status, order_id))
-
-    if courier_company in COURIER_OPTIONS:
-        cursor.execute('UPDATE orders SET shipping_company = ? WHERE order_id = ?', (courier_company, order_id))
-
-    if tracking_number:
-        cursor.execute('UPDATE orders SET tracking_number = ? WHERE order_id = ?', (tracking_number, order_id))
-
-    conn.commit()
-    conn.close()
-    flash('Order updated successfully.')
-    return redirect(url_for('seller_orders'))
-
-
-@app.route('/messages')
-def messages_page():
-    if 'user_id' not in session:
-        flash('Please log in to view messages.')
-        return redirect(url_for('login'))
-    return render_template('messages.html')
-
-
-
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
 def admin_delete_user(user_id):
-    if not is_admin_user():
-        flash('Admin access required.')
-        return redirect(url_for('index'))
+    guard = require_admin()
+    if guard is not None:
+        return guard
 
     current_admin_id = session.get('user_id')
     if user_id == current_admin_id:
-        flash('You cannot delete your own account.')
+        flash('You cannot delete your own account.', 'error')
         return redirect(url_for('admin_dashboard', section='users'))
+
+    db = _get_firestore_db()
+    if db is not None:
+        try:
+            user_doc = db.collection('users').document(str(user_id))
+            user_doc.delete()
+
+            products_query = db.collection('Products').where('seller_id', '==', user_id).stream()
+            for doc in products_query:
+                doc.delete()
+
+            questions_query = db.collection('questions').where('user_id', '==', user_id).stream()
+            for doc in questions_query:
+                doc.delete()
+
+            answers_query = db.collection('answers').where('user_id', '==', user_id).stream()
+            for doc in answers_query:
+                doc.delete()
+        except Exception:
+            pass
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute('DELETE FROM answers WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM questions WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM Products WHERE seller_id = ?', (user_id,))
+    cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
 
-    try:
-        # Load the target user
-        cursor.execute('SELECT is_admin, email FROM users WHERE user_id = ?', (user_id,))
-        target = cursor.fetchone()
-        if not target:
-            flash('User not found.')
-            return redirect(url_for('admin_dashboard', section='users'))
-
-        # Determine whether the target is an administrator (explicit flag or ADMIN_EMAIL fallback)
-        is_target_admin = bool(target.get('is_admin'))
-        if not is_target_admin and os.environ.get('ADMIN_EMAIL') and target.get('email') and target['email'].lower() == os.environ.get('ADMIN_EMAIL').lower():
-            is_target_admin = True
-
-        # Count administrators remaining AFTER this deletion (exclude the target itself).
-        # Rows use dict_factory, so read the count by its aliased column name (not integer index).
-        cursor.execute(
-            'SELECT COUNT(*) AS cnt FROM users WHERE (is_admin = 1 OR lower(email) = lower(?)) AND user_id <> ?',
-            (os.environ.get('ADMIN_EMAIL', ''), user_id),
-        )
-        remaining_admins = cursor.fetchone()['cnt']
-
-        if is_target_admin and remaining_admins == 0:
-            flash('Cannot delete the final remaining administrator.')
-            return redirect(url_for('admin_dashboard', section='users'))
-
-        cursor.execute('UPDATE Products SET seller_id = NULL WHERE seller_id = ?', (user_id,))
-        cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
-        conn.commit()
-        flash('User removed.')
-    except Exception as e:
-        conn.rollback()
-        flash(f'Error removing user: {str(e)}')
-    finally:
-        conn.close()
+    flash('User deleted successfully.')
     return redirect(url_for('admin_dashboard', section='users'))
-
 
 @app.route('/admin/listing/<int:product_id>/delete', methods=['POST'])
 def admin_delete_listing(product_id):
-    if not is_admin_user():
-        flash('Admin access required.')
-        return redirect(url_for('index'))
+    guard = require_admin()
+    if guard is not None:
+        return guard
     product = get_product_by_id(product_id)
     if not product:
         flash('Listing not found.')
@@ -1255,23 +1065,33 @@ def admin_delete_listing(product_id):
     return redirect(url_for('admin_dashboard', section='listings'))
 
 
-@app.route('/admin/order/<int:order_id>/update', methods=['POST'])
-def admin_update_order(order_id):
-    if not is_admin_user():
-        flash('Admin access required.')
-        return redirect(url_for('index'))
-    new_status = sanitize_input(request.form.get('status', ''))
-    if not new_status or new_status not in ORDER_STATUSES:
-        flash('No valid status provided.')
-        return redirect(url_for('admin_dashboard', section='orders'))
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('UPDATE orders SET status = ? WHERE order_id = ?', (new_status, order_id))
-    conn.commit()
-    conn.close()
-    flash('Order status updated.')
-    return redirect(url_for('admin_dashboard', section='orders'))
+@app.route('/messages')
+def messages_page():
+    if 'user_id' not in session:
+        flash('Please log in to view messages.')
+        return redirect(url_for('login'))
+    return render_template('messages.html')
 
+@app.route('/admin-portal')
+def admin_portal():
+    guard = require_admin()
+    if guard is not None:
+        return guard
+    return redirect(url_for('admin_dashboard', section='listings'))
+
+@app.route('/admin/users')
+def admin_users():
+    guard = require_admin()
+    if guard is not None:
+        return guard
+    return redirect(url_for('admin_dashboard', section='users'))
+
+@app.route('/admin/orders')
+def admin_orders():
+    guard = require_admin()
+    if guard is not None:
+        return guard
+    return redirect(url_for('admin_dashboard', section='orders'))
 
 @app.route('/product/<int:product_id>/question', methods=['POST'])
 def post_question(product_id):
@@ -1320,106 +1140,169 @@ def signup():
         email = sanitize_input(request.form.get('email', '')).lower()
         password = request.form.get('password', '')
         phone = sanitize_input(request.form.get('phone', ''))
+        contact_preference = request.form.get('contact_preference', 'whatsapp')
+        if contact_preference not in ('whatsapp', 'email'):
+            contact_preference = 'whatsapp'
         address = sanitize_input(request.form.get('address', ''))
         city = sanitize_input(request.form.get('city', ''))
         province = sanitize_input(request.form.get('province', ''))
         postal_code = sanitize_input(request.form.get('postal_code', ''))
         bio = sanitize_input(request.form.get('bio', ''))
 
-        def render_form():
-            # Re-render with entered values so the user does not have to retype
-            # Name/Email/Username after a validation error. Password is never echoed back.
-            return render_template('signup.html', name=name, email=email, username=username)
+        name_error = ''
+        email_error = ''
+        username_error = ''
+        password_error = ''
+        phone_error = ''
+        address_error = ''
+        city_error = ''
+        general_error = ''
 
-        if not (name and email and password and phone and address and city):
-            flash('Please complete all required fields.')
-            return render_form()
+        if not name:
+            name_error = 'Full name is required.'
+        if not email:
+            email_error = 'Email address is required.'
+        elif not validate_email(email):
+            email_error = 'Please provide a valid email address.'
+        if not password:
+            password_error = 'Password is required.'
+        if contact_preference == 'whatsapp' and not phone:
+            phone_error = 'Phone number is required for WhatsApp contact.'
+        if not address:
+            address_error = 'Address is required.'
+        if not city:
+            city_error = 'City is required.'
 
-        if not validate_email(email):
-            flash('Please provide a valid email address.')
-            return render_form()
-
-        if not validate_username(username):
-            flash('Please choose a valid username (3-32 chars, letters, numbers, _.-).')
-            return render_form()
-
-        if len(password) < 8:
-            flash('Password must be at least 8 characters long.')
-            return render_form()
-        if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
-            flash('Password must contain both letters and numbers.')
-            return render_form()
-
-        password_hash = generate_password_hash(password)
-        join_date = datetime.utcnow()
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
+        cursor = None
+        conn = None
         try:
-            cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?)', (email,))
-            if cursor.fetchone():
-                flash('An account with this email already exists.')
-                return render_form()
-
-            if username:
-                cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(?)', (username,))
+            if not any([name_error, email_error, password_error, phone_error, address_error, city_error, username_error]):
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?)', (email,))
                 if cursor.fetchone():
-                    flash('This username is already taken.')
-                    return render_form()
+                    email_error = 'An account with this email already exists.'
 
-            cursor.execute('''
-                INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date))
-            conn.commit()
-            flash('Account created successfully! Please log in to continue.')
-            return redirect(url_for('login'))
+                if username:
+                    cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(?)', (username,))
+                    if cursor.fetchone():
+                        username_error = 'This username is already taken.'
+
+                fire_user = find_user_by_email_firestore(email)
+                if fire_user:
+                    email_error = 'An account with this email already exists.'
+
+            if any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
+                general_error = 'Please correct the errors below.'
+
+            if not any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
+                password_hash = generate_password_hash(password)
+                join_date = datetime.utcnow()
+
+                cursor.execute('''
+                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date, contact_preference, contact_phone, contact_email)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date, contact_preference, phone, email))
+                conn.commit()
+
+                db = _get_firestore_db()
+                if db is not None:
+                    try:
+                        user_data = {
+                            'name': name,
+                            'username': username,
+                            'email': email,
+                            'password': password_hash,
+                            'phone': phone,
+                            'address': address,
+                            'street_address': address,
+                            'city': city,
+                            'province': province,
+                            'postal_code': postal_code,
+                            'bio': bio,
+                            'join_date': join_date,
+                            'email_verified': 0,
+                            'phone_verified': 0,
+                            'profile_picture': '',
+                            'seller_rating': 0.0,
+                            'total_sales': 0,
+                            'contact_preference': contact_preference,
+                            'contact_phone': phone,
+                            'contact_email': email,
+                        }
+                        db.collection('users').add(user_data)
+                    except Exception:
+                        pass
+
+                flash('Account created successfully! Please log in to continue.', 'success')
+                return redirect(url_for('login'))
         except Exception as e:
             msg = str(e).lower()
+            if conn:
+                conn.rollback()
             if 'unique' in msg or 'constraint' in msg:
-                flash('An account with this email or username already exists.')
+                general_error = 'An account with this email or username already exists.'
             else:
-                flash('We could not create your account right now. Please try again.')
-            return render_form()
+                general_error = 'We could not create your account right now. Please try again.'
         finally:
-            conn.close()
+            if conn:
+                conn.close()
+
+        return render_template('signup.html',
+            name=name, email=email, username=username,
+            name_error=name_error, email_error=email_error, username_error=username_error,
+            password_error=password_error, phone_error=phone_error, address_error=address_error,
+            city_error=city_error, general_error=general_error
+        )
 
     return render_template('signup.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    email_value = ''
+    email_error = ''
+    password_error = ''
+    general_error = ''
     if request.method == 'POST':
-        email = sanitize_input(request.form.get('email', '')).lower()
+        email_value = sanitize_input(request.form.get('email', '')).lower()
         password = request.form.get('password', '')
 
-        if not validate_email(email):
-            flash('Please provide a valid email address.')
-            return redirect(url_for('login'))
+        if not validate_email(email_value):
+            email_error = 'Please provide a valid email address.'
+            general_error = 'Please correct the errors below.'
+        else:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email_value,))
+            user = cursor.fetchone()
+            conn.close()
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+            if user and check_password_hash(user['password'], password):
+                session.clear()
+                session.permanent = True
+                session['user_id'] = user['user_id']
+                session['user_name'] = user['name']
+                session['email_verified'] = bool(user.get('email_verified', 0))
+                session['phone_verified'] = bool(user.get('phone_verified', 0))
+                flash(f'Welcome back, {user["name"]}!', 'success')
+                return redirect(url_for('index'))
 
-        cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email,))
-        user = cursor.fetchone()
+            fire_user = find_user_by_email_firestore(email_value)
+            if fire_user and fire_user.get('password') and check_password_hash(fire_user['password'], password):
+                session.clear()
+                session.permanent = True
+                session['user_id'] = fire_user['user_id']
+                session['user_name'] = fire_user.get('name', '')
+                session['email_verified'] = bool(fire_user.get('email_verified', 0))
+                session['phone_verified'] = bool(fire_user.get('phone_verified', 0))
+                flash(f'Welcome back, {fire_user.get("name", "")}!', 'success')
+                return redirect(url_for('index'))
 
-        conn.close()
+            password_error = 'Incorrect password.'
+            general_error = 'Please correct the errors below.'
 
-        if user and check_password_hash(user['password'], password):
-            session.clear()
-            session.permanent = True
-            session['user_id'] = user['user_id']
-            session['user_name'] = user['name']
-            session['email_verified'] = bool(user.get('email_verified', 0))
-            session['phone_verified'] = bool(user.get('phone_verified', 0))
-            flash(f'Welcome back, {user["name"]}!')
-            return redirect(url_for('index'))
-
-        flash('Invalid email or password. Please try again.')
-        return redirect(url_for('login'))
-
-    return render_template('login.html')
+    return render_template('login.html', email_value=email_value, email_error=email_error, password_error=password_error, general_error=general_error)
 
 
 @app.route('/logout')

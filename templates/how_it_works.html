@@ -57,7 +57,7 @@
         align-items: center;
         justify-content: center;
         margin-bottom: 16px;
-        font-size: 22px;
+        color: #1c1c1c;
     }
     .hiw-card h3 {
         margin: 0 0 8px 0;
@@ -142,45 +142,104 @@
         }
     }
 
-    @media (max-width: 640px) {
-        .hiw-hero { padding: 40px 0 20px 0; }
-        .hiw-hero h1 { font-size: 34px; }
-        .hiw-cards { grid-template-columns: 1fr; }
-        .hiw-faq { grid-template-columns: 1fr; }
-        .hiw-cta { padding: 36px 22px; }
+    @media (max-width: 768px) {
+        .hiw-hero { padding: 28px 0 16px 0; max-width: 100%; }
+        .hiw-hero h1 { font-size: 36px; letter-spacing: -0.5px; margin-bottom: 8px; }
+        .hiw-hero p { font-size: 16px; line-height: 1.6; max-width: 100%; }
+
+        .hiw-section-title { margin: 20px 0 14px 0; }
+
+        .hiw-cards { grid-template-columns: 1fr; gap: 16px; }
+        .hiw-card {
+            width: 94%;
+            margin: 0 auto;
+            padding: 18px;
+            display: grid;
+            grid-template-columns: 44px 1fr;
+            grid-template-rows: auto auto;
+            gap: 2px 12px;
+            align-items: center;
+            transition: none;
+        }
+        .hiw-card:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        .hiw-card-icon {
+            width: 44px;
+            height: 44px;
+            margin-bottom: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hiw-card-icon svg { width: 22px; height: 22px; }
+        .hiw-card h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        .hiw-card p {
+            grid-column: 1 / -1;
+            margin: 4px 0 0 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .hiw-faq { grid-template-columns: 1fr; gap: 16px; }
+        .hiw-faq-item {
+            padding: 18px;
+            transition: none;
+        }
+        .hiw-faq-item:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .hiw-cta { margin: 40px 0 20px 0; padding: 32px 24px; border-radius: 16px; }
+        .hiw-cta h2 { font-size: 22px; }
+        .hiw-cta p { font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
     }
 </style>
 
 <div class="hiw-hero">
     <h1>How It Works</h1>
-    <p>Buy and sell pre-loved fashion in four simple steps.</p>
+    <p>Buy and sell pre-loved fashion directly with each other.</p>
 </div>
 
 <h2 class="hiw-section-title">The Marketplace Flow</h2>
 
 <div class="hiw-cards">
     <div class="hiw-card">
-        <div class="hiw-card-icon">📦</div>
+        <div class="hiw-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+            </svg>
+        </div>
         <h3>List Your Item</h3>
         <p>Upload clear photos, write an accurate description, choose the item's condition and price, then publish your listing so buyers can easily find it.</p>
     </div>
 
     <div class="hiw-card">
-        <div class="hiw-card-icon">🛒</div>
-        <h3>Buyer Places an Order</h3>
-        <p>Buyers browse the marketplace, view product details, and place an order for the item they want to purchase.</p>
+        <div class="hiw-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 013 21V12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+            </svg>
+        </div>
+        <h3>Connect Directly</h3>
+        <p>Buyers browse listings, view details, and contact sellers directly through public questions or direct messages to arrange a purchase.</p>
     </div>
 
     <div class="hiw-card">
-        <div class="hiw-card-icon">🚚</div>
-        <h3>Pack & Ship</h3>
-        <p>Once you receive an order, carefully pack the item and ship it using the order details provided by the platform.</p>
-    </div>
-
-    <div class="hiw-card">
-        <div class="hiw-card-icon">✅</div>
-        <h3>Order Completed</h3>
-        <p>After a successful sale, the platform deducts a 10% commission and the seller receives the remaining amount.</p>
+        <div class="hiw-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+            </svg>
+        </div>
+        <h3>Meet & Exchange</h3>
+        <p>Buyers and sellers agree on a meeting place or delivery method. The platform simply connects you—no checkout, no shipping labels, no hidden fees.</p>
     </div>
 </div>
 
@@ -198,13 +257,13 @@
     </div>
 
     <div class="hiw-faq-item">
-        <h4>How does shipping work?</h4>
-        <p>Sellers ship items via TCS, Leopards, or M&P. Buyers receive a tracking number after checkout.</p>
+        <h4>How does payment work?</h4>
+        <p>Buyers and sellers arrange payment between themselves. We recommend secure methods like bank transfer or cash on delivery.</p>
     </div>
 
     <div class="hiw-faq-item">
-        <h4>When do sellers get paid?</h4>
-        <p>Sellers receive their payout after the order is completed, minus the 10% platform commission.</p>
+        <h4>Is there a platform fee?</h4>
+        <p>No. This is a direct peer-to-peer marketplace. You keep what you earn, and buyers pay only the listing price.</p>
     </div>
 </div>
 
