@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from urllib.parse import quote
 from ai_service import analyze_item
+import firestore_db
 
 # CLOUDINARY IMPORTS (optional for local development)
 try:
@@ -426,95 +427,51 @@ def save_uploaded_images(files):
 
 
 
-def find_user_by_email_firestore(email):
-    db = _get_firestore_db()
-    if db is None:
-        return None
-    try:
-        docs = db.collection('users').where('email', '==', email).stream()
-        for doc in docs:
-            data = doc.to_dict()
-            data['user_id'] = int(doc.id) if doc.id.isdigit() else doc.id
-            return data
-    except Exception:
-        pass
-    return None
-
-
 def get_product_by_id(product_id):
+    if firestore_db.is_firestore_available():
+        product = firestore_db.fs_get_product(product_id)
+        if product:
+            return product
     conn = get_db_connection()
     cursor = conn.cursor()
     product = cursor.execute("SELECT * FROM Products WHERE id = ?", (product_id,)).fetchone()
     conn.close()
-    return product
-
-
-def _get_firestore_db():
-    try:
-        if not firebase_admin._apps:
-            cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(cred)
-        return firestore.client()
-    except Exception:
-        return None
+    return dict(product) if product else None
 
 
 def get_products_from_firestore(category=None):
-    db = _get_firestore_db()
-    if db is None:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        if category:
-            cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
-        else:
-            cursor.execute("SELECT * FROM Products WHERE status = 'available'")
-        products = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return products
-    try:
-        docs = db.collection('Products').where('status', '==', 'available').stream()
-        products = []
-        for doc in docs:
-            product = doc.to_dict()
-            product['id'] = int(doc.id)
-            if category and product.get('category') != category:
-                continue
-            products.append(product)
-        return products
-    except Exception:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        if category:
-            cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
-        else:
-            cursor.execute("SELECT * FROM Products WHERE status = 'available'")
-        products = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return products
+    if firestore_db.is_firestore_available():
+        return firestore_db.fs_get_all_products(category=category)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if category:
+        cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
+    else:
+        cursor.execute("SELECT * FROM Products WHERE status = 'available'")
+    products = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return products
 
 
 def get_single_product_from_firestore(product_id):
-    db = _get_firestore_db()
-    if db is None:
-        return get_product_by_id(product_id)
-    try:
-        doc = db.collection('Products').document(str(product_id)).get()
-        if doc.exists:
-            product = doc.to_dict()
-            product['id'] = int(doc.id)
+    if firestore_db.is_firestore_available():
+        product = firestore_db.fs_get_product(product_id)
+        if product:
             return product
-    except Exception:
-        pass
     return get_product_by_id(product_id)
 
 
 def is_admin_user():
     if 'user_id' not in session:
         return False
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    user = cursor.execute('SELECT * FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-    conn.close()
+    user = None
+    if firestore_db.is_firestore_available():
+        user = firestore_db.fs_get_user(session['user_id'])
+    if not user:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        user = cursor.execute('SELECT * FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+        conn.close()
     admin_email = os.environ.get('ADMIN_EMAIL')
     if not user:
         return False
@@ -576,30 +533,51 @@ def product_details(product_id):
     image_list = []
     if product.get('images'):
         try:
-            image_list = json.loads(product['images'])
+            image_list = json.loads(product['images']) if isinstance(product['images'], str) else product['images']
         except Exception:
             image_list = [product['images']] if product.get('image_url') else []
     elif product.get('image_url'):
         image_list = [product['image_url']]
-    # Load public questions and answers
-    conn = get_db_connection()
-    cur = conn.cursor()
-    rows = cur.execute('SELECT q.question_id, q.content, q.created_at, u.name as asker FROM questions q LEFT JOIN users u ON q.user_id = u.user_id WHERE q.product_id = ? ORDER BY q.created_at ASC', (product_id,)).fetchall()
-    questions = [dict(r) for r in rows]
-    for q in questions:
-        qrows = cur.execute('SELECT a.answer_id, a.content, a.created_at, u.name as answerer FROM answers a LEFT JOIN users u ON a.user_id = u.user_id WHERE a.question_id = ? ORDER BY a.created_at ASC', (q['question_id'],)).fetchall()
-        q['answers'] = [dict(ar) for ar in qrows]
+
+    questions = []
+    if firestore_db.is_firestore_available():
+        questions = firestore_db.fs_get_questions_by_product(product_id)
+        for q in questions:
+            q['answers'] = firestore_db.fs_get_answers_by_question(q.get('question_id'))
+            asker = firestore_db.fs_get_user(q.get('user_id'))
+            q['asker'] = asker.get('name') if asker else 'Anonymous'
+            for a in q['answers']:
+                answerer = firestore_db.fs_get_user(a.get('user_id'))
+                a['answerer'] = answerer.get('name') if answerer else 'Seller'
+    else:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        rows = cur.execute('SELECT q.question_id, q.content, q.created_at, u.name as asker FROM questions q LEFT JOIN users u ON q.user_id = u.user_id WHERE q.product_id = ? ORDER BY q.created_at ASC', (product_id,)).fetchall()
+        questions = [dict(r) for r in rows]
+        for q in questions:
+            qrows = cur.execute('SELECT a.answer_id, a.content, a.created_at, u.name as answerer FROM answers a LEFT JOIN users u ON a.user_id = u.user_id WHERE a.question_id = ? ORDER BY a.created_at ASC', (q['question_id'],)).fetchall()
+            q['answers'] = [dict(ar) for ar in qrows]
+        conn.close()
 
     seller_phone = ''
     seller_email = ''
     seller_contact_preference = 'whatsapp'
     seller_id = product.get('seller_id')
     if seller_id:
-        seller_row = cur.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
-        if seller_row:
-            seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
-            seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
-            seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
+        seller = firestore_db.fs_get_user(seller_id)
+        if not seller:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            seller_row = cursor.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
+            conn.close()
+            if seller_row:
+                seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
+                seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
+                seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
+        else:
+            seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
+            seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
+            seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
 
     whatsapp_url = ''
     gmail_url = ''
@@ -659,7 +637,6 @@ def sell():
         existing_rows = [{'title': row['title'], 'description': row['description']} for row in raw]
 
         ai_result = analyze_item(category, times_worn, has_tears, description, tags, title=title, existing_listings=existing_rows)
-        # We no longer use a numeric AI quality score. Keep the descriptive summary for UI/AI-generated descriptions.
         condition_summary = ai_result.get('summary')
         auto_category = ai_result.get('category')
         duplicate = ai_result.get('duplicate', False)
@@ -668,40 +645,37 @@ def sell():
         if duplicate:
             flash('Warning: this listing appears similar to another item already on the marketplace.')
 
-        cursor.execute('''
-            INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id']))
-        product_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        product_data = {
+            'title': title,
+            'brand': brand,
+            'category': category,
+            'size': size,
+            'color': color,
+            'gender': gender,
+            'asking_price': asking_price,
+            'image_url': image_url,
+            'images': image_paths,
+            'description': description,
+            'tags': tags,
+            'times_worn': int(times_worn),
+            'seller_condition': seller_condition,
+            'has_tears': has_tears,
+            'seller_address': seller_address,
+            'condition_summary': condition_summary,
+            'seller_id': session['user_id'],
+            'status': 'available',
+        }
 
-        db = _get_firestore_db()
-        if db is not None:
-            try:
-                product_data = {
-                    'title': title,
-                    'brand': brand,
-                    'category': category,
-                    'size': size,
-                    'color': color,
-                    'gender': gender,
-                    'asking_price': asking_price,
-                    'image_url': image_url,
-                    'images': images_json,
-                    'description': description,
-                    'tags': tags,
-                    'times_worn': int(times_worn),
-                    'seller_condition': seller_condition,
-                    'has_tears': has_tears,
-                    'seller_address': seller_address,
-                    'condition_summary': condition_summary,
-                    'seller_id': session['user_id'],
-                    'status': 'available',
-                }
-                db.collection('Products').document(str(product_id)).set(product_data)
-            except Exception:
-                pass
+        if firestore_db.is_firestore_available():
+            product_id = firestore_db.fs_create_product(product_data)
+        else:
+            cursor.execute('''
+                INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id']))
+            product_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
 
         flash('Your thrift item has been successfully listed!')
         return redirect(url_for('seller_listings'))
@@ -715,10 +689,13 @@ def seller_listings():
         flash('Please log in to manage your listings.')
         return redirect(url_for('login'))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    listings = cursor.execute('SELECT * FROM Products WHERE seller_id = ?', (session['user_id'],)).fetchall()
-    conn.close()
+    if firestore_db.is_firestore_available():
+        listings = firestore_db.fs_get_products_by_seller(session['user_id'])
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        listings = cursor.execute('SELECT * FROM Products WHERE seller_id = ?', (session['user_id'],)).fetchall()
+        conn.close()
     return render_template('seller_listings.html', listings=listings)
 
 
@@ -729,16 +706,12 @@ def delete_listing(product_id):
         return redirect(url_for('login'))
 
     product = get_product_by_id(product_id)
-    if not product or product['seller_id'] != session['user_id']:
+    if not product or product.get('seller_id') != session['user_id']:
         flash('Unable to delete the listing.')
         return redirect(url_for('seller_listings'))
 
-    db = _get_firestore_db()
-    if db is not None:
-        try:
-            db.collection('Products').document(str(product_id)).delete()
-        except Exception:
-            pass
+    if firestore_db.is_firestore_available():
+        firestore_db.fs_delete_product(product_id)
 
     # attempt to remove local image files if present
     try:
@@ -844,43 +817,40 @@ def edit_listing(product_id):
 
         condition_summary = product.get('condition_summary', '')
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE Products SET title=?, brand=?, category=?, size=?, color=?, gender=?, asking_price=?,
-                image_url=?, images=?, description=?, tags=?, times_worn=?, seller_condition=?,
-                has_tears=?, seller_address=?, condition_summary=?
-            WHERE id=?
-        ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, product_id))
-        conn.commit()
-        conn.close()
+        product_data = {
+            'title': title,
+            'brand': brand,
+            'category': category,
+            'size': size,
+            'color': color,
+            'gender': gender,
+            'asking_price': asking_price,
+            'image_url': image_url,
+            'images': new_images,
+            'description': description,
+            'tags': tags,
+            'times_worn': int(times_worn),
+            'seller_condition': seller_condition,
+            'has_tears': has_tears,
+            'seller_address': seller_address,
+            'condition_summary': condition_summary,
+            'seller_id': session['user_id'],
+            'status': product.get('status', 'available'),
+        }
 
-        db = _get_firestore_db()
-        if db is not None:
-            try:
-                product_data = {
-                    'title': title,
-                    'brand': brand,
-                    'category': category,
-                    'size': size,
-                    'color': color,
-                    'gender': gender,
-                    'asking_price': asking_price,
-                    'image_url': image_url,
-                    'images': images_json,
-                    'description': description,
-                    'tags': tags,
-                    'times_worn': int(times_worn),
-                    'seller_condition': seller_condition,
-                    'has_tears': has_tears,
-                    'seller_address': seller_address,
-                    'condition_summary': condition_summary,
-                    'seller_id': session['user_id'],
-                    'status': product.get('status', 'available'),
-                }
-                db.collection('Products').document(str(product_id)).set(product_data)
-            except Exception:
-                pass
+        if firestore_db.is_firestore_available():
+            firestore_db.fs_update_product(product_id, product_data)
+        else:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE Products SET title=?, brand=?, category=?, size=?, color=?, gender=?, asking_price=?,
+                    image_url=?, images=?, description=?, tags=?, times_worn=?, seller_condition=?,
+                    has_tears=?, seller_address=?, condition_summary=?
+                WHERE id=?
+            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, product_id))
+            conn.commit()
+            conn.close()
 
         flash('Listing updated successfully.')
         return redirect(url_for('seller_listings'))
@@ -894,11 +864,12 @@ def account_settings():
         flash('Please log in to update your account settings.')
         return redirect(url_for('login'))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    user = cursor.execute('SELECT name, email, phone, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-    conn.close()
-
+    user = firestore_db.fs_get_user(session['user_id'])
+    if not user:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        user = cursor.execute('SELECT name, email, phone, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+        conn.close()
     if not user:
         flash('Account not found.')
         return redirect(url_for('index'))
@@ -930,27 +901,23 @@ def account_settings():
                 email_error = 'Please provide a valid email address.'
 
         if not any([phone_error, email_error, general_error]):
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE users SET contact_preference = ?, contact_phone = ?, contact_email = ? WHERE user_id = ?', (contact_preference, contact_phone, contact_email, session['user_id']))
-            conn.commit()
-            conn.close()
-
-            db = _get_firestore_db()
-            if db is not None:
-                try:
-                    db.collection('users').document(str(session['user_id'])).set({
-                        'contact_preference': contact_preference,
-                        'contact_phone': contact_phone,
-                        'contact_email': contact_email,
-                    }, merge=True)
-                except Exception:
-                    pass
+            update_data = {
+                'contact_preference': contact_preference,
+                'contact_phone': contact_phone,
+                'contact_email': contact_email,
+            }
+            if firestore_db.is_firestore_available():
+                firestore_db.fs_update_user(session['user_id'], update_data)
+            else:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('UPDATE users SET contact_preference = ?, contact_phone = ?, contact_email = ? WHERE user_id = ?', (contact_preference, contact_phone, contact_email, session['user_id']))
+                conn.commit()
+                conn.close()
 
             flash('Contact preferences updated successfully.')
             return redirect(url_for('account_settings'))
 
-        conn.close()
     else:
         phone_error = ''
         email_error = ''
@@ -966,13 +933,36 @@ def admin_dashboard():
         return guard
     
     section = request.args.get('section', 'listings')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
-    users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
-    listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
-    listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
-    conn.close()
+    if firestore_db.is_firestore_available():
+        db = firestore_db.get_firestore_db()
+        listings = []
+        users = []
+        listing_counts = {}
+        try:
+            for doc in db.collection('Products').order_by('created_at', direction='DESCENDING').stream():
+                p = doc.to_dict()
+                p['id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                listings.append(p)
+            for doc in db.collection('users').order_by('join_date', direction='DESCENDING').stream():
+                u = doc.to_dict()
+                u['user_id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                users.append(u)
+            seller_counts = {}
+            for p in listings:
+                sid = p.get('seller_id')
+                if sid:
+                    seller_counts[sid] = seller_counts.get(sid, 0) + 1
+            listing_counts = seller_counts
+        except Exception:
+            pass
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
+        users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
+        listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
+        listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
+        conn.close()
     
     return render_template('admin_dashboard.html',
         section=section,
@@ -993,23 +983,23 @@ def admin_delete_user(user_id):
         flash('You cannot delete your own account.', 'error')
         return redirect(url_for('admin_dashboard', section='users'))
 
-    db = _get_firestore_db()
-    if db is not None:
+    if firestore_db.is_firestore_available():
         try:
+            db = firestore_db.get_firestore_db()
             user_doc = db.collection('users').document(str(user_id))
             user_doc.delete()
 
             products_query = db.collection('Products').where('seller_id', '==', user_id).stream()
             for doc in products_query:
-                doc.delete()
+                doc.reference.delete()
 
             questions_query = db.collection('questions').where('user_id', '==', user_id).stream()
             for doc in questions_query:
-                doc.delete()
+                doc.reference.delete()
 
             answers_query = db.collection('answers').where('user_id', '==', user_id).stream()
             for doc in answers_query:
-                doc.delete()
+                doc.reference.delete()
         except Exception:
             pass
 
@@ -1034,6 +1024,8 @@ def admin_delete_listing(product_id):
     if not product:
         flash('Listing not found.')
         return redirect(url_for('admin_dashboard', section='listings'))
+    if firestore_db.is_firestore_available():
+        firestore_db.fs_delete_product(product_id)
     try:
         images = []
         if product.get('images'):
@@ -1070,7 +1062,14 @@ def messages_page():
     if 'user_id' not in session:
         flash('Please log in to view messages.')
         return redirect(url_for('login'))
-    return render_template('messages.html')
+    if firestore_db.is_firestore_available():
+        messages = firestore_db.fs_get_all_messages()
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        messages = cursor.execute('SELECT * FROM messages').fetchall()
+        conn.close()
+    return render_template('messages.html', messages=messages)
 
 @app.route('/admin-portal')
 def admin_portal():
@@ -1102,11 +1101,20 @@ def post_question(product_id):
     if not content:
         flash('Please provide a question.')
         return redirect(url_for('product_details', product_id=product_id))
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO questions (product_id, user_id, content) VALUES (?, ?, ?)', (product_id, session['user_id'], content))
-    conn.commit()
-    conn.close()
+    question_data = {
+        'product_id': product_id,
+        'user_id': session['user_id'],
+        'content': content,
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    if firestore_db.is_firestore_available():
+        firestore_db.fs_create_question(question_data)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO questions (product_id, user_id, content) VALUES (?, ?, ?)', (product_id, session['user_id'], content))
+        conn.commit()
+        conn.close()
     flash('Your question has been posted publicly.')
     return redirect(url_for('product_details', product_id=product_id))
 
@@ -1124,11 +1132,20 @@ def post_answer(product_id, question_id):
     if not content:
         flash('Please provide an answer.')
         return redirect(url_for('product_details', product_id=product_id))
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('INSERT INTO answers (question_id, user_id, content) VALUES (?, ?, ?)', (question_id, session['user_id'], content))
-    conn.commit()
-    conn.close()
+    answer_data = {
+        'question_id': question_id,
+        'user_id': session['user_id'],
+        'content': content,
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    if firestore_db.is_firestore_available():
+        firestore_db.fs_create_answer(answer_data)
+    else:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('INSERT INTO answers (question_id, user_id, content) VALUES (?, ?, ?)', (question_id, session['user_id'], content))
+        conn.commit()
+        conn.close()
     flash('Your answer has been posted publicly.')
     return redirect(url_for('product_details', product_id=product_id))
 
@@ -1173,10 +1190,16 @@ def signup():
         if not city:
             city_error = 'City is required.'
 
-        cursor = None
-        conn = None
-        try:
-            if not any([name_error, email_error, password_error, phone_error, address_error, city_error, username_error]):
+        if not any([name_error, email_error, password_error, phone_error, address_error, city_error, username_error]):
+            if firestore_db.is_firestore_available():
+                existing = firestore_db.fs_get_user_by_email(email)
+                if existing:
+                    email_error = 'An account with this email already exists.'
+                if username:
+                    existing_name = firestore_db.fs_get_user_by_email(email)
+                    if existing_name and existing_name.get('username', '').lower() == username.lower():
+                        username_error = 'This username is already taken.'
+            else:
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?)', (email,))
@@ -1187,66 +1210,52 @@ def signup():
                     cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(?)', (username,))
                     if cursor.fetchone():
                         username_error = 'This username is already taken.'
+                conn.close()
 
-                fire_user = find_user_by_email_firestore(email)
-                if fire_user:
-                    email_error = 'An account with this email already exists.'
+        if any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
+            general_error = 'Please correct the errors below.'
 
-            if any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
-                general_error = 'Please correct the errors below.'
+        if not any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
+            password_hash = generate_password_hash(password)
+            join_date = datetime.utcnow()
 
-            if not any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
-                password_hash = generate_password_hash(password)
-                join_date = datetime.utcnow()
+            user_data = {
+                'name': name,
+                'username': username,
+                'email': email,
+                'password': password_hash,
+                'phone': phone,
+                'address': address,
+                'street_address': address,
+                'city': city,
+                'province': province,
+                'postal_code': postal_code,
+                'bio': bio,
+                'join_date': join_date,
+                'email_verified': 0,
+                'phone_verified': 0,
+                'profile_picture': '',
+                'seller_rating': 0.0,
+                'total_sales': 0,
+                'contact_preference': contact_preference,
+                'contact_phone': phone,
+                'contact_email': email,
+            }
 
+            if firestore_db.is_firestore_available():
+                firestore_db.fs_create_user(user_data)
+            else:
+                conn = get_db_connection()
+                cursor = conn.cursor()
                 cursor.execute('''
                     INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date, contact_preference, contact_phone, contact_email)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date, contact_preference, phone, email))
                 conn.commit()
-
-                db = _get_firestore_db()
-                if db is not None:
-                    try:
-                        user_data = {
-                            'name': name,
-                            'username': username,
-                            'email': email,
-                            'password': password_hash,
-                            'phone': phone,
-                            'address': address,
-                            'street_address': address,
-                            'city': city,
-                            'province': province,
-                            'postal_code': postal_code,
-                            'bio': bio,
-                            'join_date': join_date,
-                            'email_verified': 0,
-                            'phone_verified': 0,
-                            'profile_picture': '',
-                            'seller_rating': 0.0,
-                            'total_sales': 0,
-                            'contact_preference': contact_preference,
-                            'contact_phone': phone,
-                            'contact_email': email,
-                        }
-                        db.collection('users').add(user_data)
-                    except Exception:
-                        pass
-
-                flash('Account created successfully! Please log in to continue.', 'success')
-                return redirect(url_for('login'))
-        except Exception as e:
-            msg = str(e).lower()
-            if conn:
-                conn.rollback()
-            if 'unique' in msg or 'constraint' in msg:
-                general_error = 'An account with this email or username already exists.'
-            else:
-                general_error = 'We could not create your account right now. Please try again.'
-        finally:
-            if conn:
                 conn.close()
+
+            flash('Account created successfully! Please log in to continue.', 'success')
+            return redirect(url_for('login'))
 
         return render_template('signup.html',
             name=name, email=email, username=username,
@@ -1272,11 +1281,15 @@ def login():
             email_error = 'Please provide a valid email address.'
             general_error = 'Please correct the errors below.'
         else:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email_value,))
-            user = cursor.fetchone()
-            conn.close()
+            user = None
+            if firestore_db.is_firestore_available():
+                user = firestore_db.fs_get_user_by_email(email_value)
+            if not user:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email_value,))
+                user = cursor.fetchone()
+                conn.close()
 
             if user and check_password_hash(user['password'], password):
                 session.clear()
@@ -1286,17 +1299,6 @@ def login():
                 session['email_verified'] = bool(user.get('email_verified', 0))
                 session['phone_verified'] = bool(user.get('phone_verified', 0))
                 flash(f'Welcome back, {user["name"]}!', 'success')
-                return redirect(url_for('index'))
-
-            fire_user = find_user_by_email_firestore(email_value)
-            if fire_user and fire_user.get('password') and check_password_hash(fire_user['password'], password):
-                session.clear()
-                session.permanent = True
-                session['user_id'] = fire_user['user_id']
-                session['user_name'] = fire_user.get('name', '')
-                session['email_verified'] = bool(fire_user.get('email_verified', 0))
-                session['phone_verified'] = bool(fire_user.get('phone_verified', 0))
-                flash(f'Welcome back, {fire_user.get("name", "")}!', 'success')
                 return redirect(url_for('index'))
 
             password_error = 'Incorrect password.'

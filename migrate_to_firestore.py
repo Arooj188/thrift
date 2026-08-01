@@ -1,75 +1,65 @@
 import sqlite3
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-# Path to your downloaded Firebase service account JSON
-SERVICE_ACCOUNT_FILE = "/home/Aroojatif/thrift-2ba27-firebase-adminsdk-fbsvc-4825b550d6.json"
-
-TABLES = [
-    "users",
-    "Products",
-    "orders",
-    "messages",
-    "questions",
-    "answers"
-]
-
-
-def get_pk_column(cursor, table_name):
-    cursor.execute(f"PRAGMA table_info({table_name})")
-    for col in cursor.fetchall():
-        if col[-1] == 1:   # Primary key
-            return col[1]
-    return None
+import firestore_db
 
 
 def main():
+    if not firestore_db.is_firestore_available():
+        print("Firestore not available. Cannot migrate.")
+        return
 
-    # Initialize Firebase
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
-        firebase_admin.initialize_app(cred)
-
-    db = firestore.client()
-
-    # Open SQLite
     conn = sqlite3.connect("database.db")
     conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    cur = conn.cursor()
 
-    # Copy every table
-    for table in TABLES:
+    tables = ["users", "Products", "orders", "messages", "questions", "answers"]
+
+    for table in tables:
         print(f"Migrating {table}...")
-
-        pk = get_pk_column(cursor, table)
-
-        if pk is None:
-            print(f"Skipped {table} (no primary key)")
-            continue
-
-        cursor.execute(f"SELECT * FROM {table}")
-        rows = cursor.fetchall()
+        cur.execute(f"SELECT * FROM {table}")
+        rows = cur.fetchall()
 
         count = 0
-
         for row in rows:
             data = dict(row)
-
-            # Remove None values
             data = {k: v for k, v in data.items() if v is not None}
 
-            # Use SQLite primary key as Firestore document ID
-            doc_id = str(data[pk])
+            # Normalize images field from JSON string to list
+            if table == "Products" and data.get('images') and isinstance(data['images'], str):
+                try:
+                    data['images'] = __import__('json').loads(data['images'])
+                except Exception:
+                    pass
 
-            db.collection(table).document(doc_id).set(data, merge=True)
+            pk = None
+            if table == "users":
+                pk = data.get('user_id')
+            elif table == "Products":
+                pk = data.get('id')
+            elif table == "orders":
+                pk = data.get('order_id')
+            elif table == "messages":
+                pk = data.get('message_id')
+            elif table == "questions":
+                pk = data.get('question_id')
+            elif table == "answers":
+                pk = data.get('answer_id')
 
-            count += 1
+            if pk is None:
+                continue
+
+            doc_id = str(pk)
+            doc_ref = firestore_db.get_firestore_db().collection(table).document(doc_id)
+            if not doc_ref.get().exists:
+                doc_ref.set(data)
+                count += 1
+                print(f"  Migrated {table} id={pk}")
+            else:
+                print(f"  Skipped {table} id={pk} (already exists)")
 
         print(f"Migrated {count} {table}.")
 
     conn.close()
-
-    print("\n✅ Migration complete!")
+    print("\nMigration complete!")
 
 
 if __name__ == "__main__":
