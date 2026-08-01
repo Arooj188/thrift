@@ -524,7 +524,7 @@ def index():
 def how_it_works():
     return render_template('how_it_works.html')
 
-@app.route('/product/<int:product_id>')
+@app.route('/product/<product_id>')
 def product_details(product_id):
     product = get_single_product_from_firestore(product_id)
     if not product:
@@ -699,7 +699,7 @@ def seller_listings():
     return render_template('seller_listings.html', listings=listings)
 
 
-@app.route('/listing/<int:product_id>/delete', methods=['POST'])
+@app.route('/listing/<product_id>/delete', methods=['POST'])
 def delete_listing(product_id):
     if 'user_id' not in session:
         flash('Please log in to delete your listing.')
@@ -748,7 +748,7 @@ def delete_listing(product_id):
     return redirect(url_for('seller_listings'))
 
 
-@app.route('/listing/<int:product_id>/edit', methods=['GET', 'POST'])
+@app.route('/listing/<product_id>/edit', methods=['GET', 'POST'])
 def edit_listing(product_id):
     if 'user_id' not in session:
         flash('Please log in to edit your listing.')
@@ -1015,7 +1015,7 @@ def admin_delete_user(user_id):
     flash('User deleted successfully.')
     return redirect(url_for('admin_dashboard', section='users'))
 
-@app.route('/admin/listing/<int:product_id>/delete', methods=['POST'])
+@app.route('/admin/listing/<product_id>/delete', methods=['POST'])
 def admin_delete_listing(product_id):
     guard = require_admin()
     if guard is not None:
@@ -1092,7 +1092,7 @@ def admin_orders():
         return guard
     return redirect(url_for('admin_dashboard', section='orders'))
 
-@app.route('/product/<int:product_id>/question', methods=['POST'])
+@app.route('/product/<product_id>/question', methods=['POST'])
 def post_question(product_id):
     if 'user_id' not in session:
         flash('Please log in to ask questions.')
@@ -1119,7 +1119,7 @@ def post_question(product_id):
     return redirect(url_for('product_details', product_id=product_id))
 
 
-@app.route('/product/<int:product_id>/answer/<int:question_id>', methods=['POST'])
+@app.route('/product/<product_id>/answer/<question_id>', methods=['POST'])
 def post_answer(product_id, question_id):
     if 'user_id' not in session:
         flash('Please log in to answer questions.')
