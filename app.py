@@ -565,7 +565,11 @@ def product_details(product_id):
     seller_id = product.get('seller_id')
     if seller_id:
         seller = firestore_db.fs_get_user(seller_id)
-        if not seller:
+        if seller:
+            seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
+            seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
+            seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
+        elif not firestore_db.is_firestore_available():
             conn = get_db_connection()
             cursor = conn.cursor()
             seller_row = cursor.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
@@ -574,10 +578,6 @@ def product_details(product_id):
                 seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
                 seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
                 seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
-        else:
-            seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
-            seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
-            seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
 
     whatsapp_url = ''
     gmail_url = ''
@@ -592,7 +592,6 @@ def product_details(product_id):
             gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(seller_email)}&su={quote(subject)}&body={quote(body)}"
             mailto_url = f"mailto:{seller_email}?subject={quote(subject)}&body={quote(body)}"
 
-    conn.close()
     return render_template('product_details.html', product=product, image_list=image_list, questions=questions, seller_phone=seller_phone, seller_email=seller_email, seller_contact_preference=seller_contact_preference, whatsapp_url=whatsapp_url, gmail_url=gmail_url, mailto_url=mailto_url)
 
 @app.route('/sell', methods=['GET', 'POST'])
