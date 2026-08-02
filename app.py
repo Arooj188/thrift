@@ -1,7 +1,12 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import importlib
 import json
 import logging
 import os
+import secrets
 import sqlite3
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -12,8 +17,12 @@ from werkzeug.utils import secure_filename
 from urllib.parse import quote
 from ai_service import analyze_item
 import firestore_db
+from email_service import send_email, send_password_reset_email
+
+RESET_TOKEN_EXPIRY_MINUTES = 60
 
 # CLOUDINARY IMPORTS (optional for local development)
+
 try:
     cloudinary = importlib.import_module('cloudinary')
     cloudinary_uploader = importlib.import_module('cloudinary.uploader')
@@ -109,8 +118,19 @@ def has_product_image(image_url, images):
     return False
 
 
+def format_sold_date(value):
+    if not value:
+        return ''
+    try:
+        dt = datetime.strptime(str(value)[:10], '%Y-%m-%d')
+        return f"{dt.day} {dt.strftime('%B')} {dt.year}"
+    except Exception:
+        return value
+
+
 app.jinja_env.globals['build_image_url'] = build_image_url
 app.jinja_env.globals['has_product_image'] = has_product_image
+app.jinja_env.filters['format_sold_date'] = format_sold_date
 
 
 def get_db_connection():
@@ -134,22 +154,18 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            username TEXT,
             email TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             phone TEXT NOT NULL,
-            address TEXT NOT NULL,
-            street_address TEXT DEFAULT '',
-            city TEXT NOT NULL,
-            province TEXT DEFAULT '',
-            postal_code TEXT DEFAULT '',
             email_verified INTEGER DEFAULT 0,
             phone_verified INTEGER DEFAULT 0,
             profile_picture TEXT DEFAULT '',
-            bio TEXT DEFAULT '',
-            join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             seller_rating REAL DEFAULT 0.0,
-            total_sales INTEGER DEFAULT 0
+            total_sales INTEGER DEFAULT 0,
+            contact_preference TEXT DEFAULT 'whatsapp',
+            contact_phone TEXT DEFAULT '',
+            contact_email TEXT DEFAULT '',
+            join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     cursor.execute(f'''
@@ -228,7 +244,31 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     ''')
-    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS stats (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            total_users INTEGER DEFAULT 0,
+            active_listings INTEGER DEFAULT 0,
+            sold_items INTEGER DEFAULT 0,
+            questions_asked INTEGER DEFAULT 0
+        )
+    ''')
+    cursor.execute('INSERT OR IGNORE INTO stats (id, total_users, active_listings, sold_items, questions_asked) VALUES (1, 0, 0, 0, 0)')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT UNIQUE NOT NULL,
+            user_id INTEGER NOT NULL,
+            email TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL,
+            used INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token)')
+
     try:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
     except sqlite3.OperationalError:
@@ -288,6 +328,8 @@ def ensure_schema():
         ("tracking_number", "TEXT"),
         ("created_at", "TEXT"),
         ("order_id", "INTEGER"),
+        ("buyer_contact_method", "TEXT DEFAULT 'whatsapp'"),
+        ("sold_date", "TEXT"),
     ]
     for column_name, definition in product_columns:
         if not schema_has_column(conn, 'Products', column_name):
@@ -347,6 +389,23 @@ def ensure_schema():
                 FOREIGN KEY (order_id) REFERENCES orders(order_id)
             )
         ''')
+    except Exception:
+        pass
+
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT UNIQUE NOT NULL,
+                user_id INTEGER NOT NULL,
+                email TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                used INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token)')
     except Exception:
         pass
 
@@ -461,6 +520,129 @@ def get_single_product_from_firestore(product_id):
     return get_product_by_id(product_id)
 
 
+# ============================
+# Password reset helpers
+# ============================
+
+def validate_password(password: str) -> bool:
+    if not password or len(password) < 8:
+        return False
+    return password.strip() != ''
+
+
+def get_user_by_email(email):
+    if firestore_db.is_firestore_available():
+        user = firestore_db.fs_get_user_by_email(email)
+        if user:
+            return user
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    user = cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email,)).fetchone()
+    conn.close()
+    return dict(user) if user else None
+
+
+def create_password_reset(user, email, token, expires_at, created_at=None):
+    if created_at is None:
+        created_at = datetime.utcnow()
+    if firestore_db.is_firestore_available():
+        result = firestore_db.fs_create_password_reset({
+            'token': token,
+            'user_id': user['user_id'],
+            'email': email,
+            'created_at': created_at.isoformat(),
+            'expires_at': expires_at.isoformat(),
+            'used': False,
+        })
+        return result == token
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO password_resets (token, user_id, email, created_at, expires_at, used) VALUES (?, ?, ?, ?, ?, 0)',
+        (token, user['user_id'], email, created_at.isoformat(), expires_at.isoformat()),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def verify_password_reset_token(token):
+    if not token:
+        return None
+    reset = None
+    if firestore_db.is_firestore_available():
+        reset = firestore_db.fs_get_password_reset(token)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        row = cursor.execute('SELECT * FROM password_resets WHERE token = ?', (token,)).fetchone()
+        conn.close()
+        reset = dict(row) if row else None
+    if not reset:
+        return None
+    if reset.get('used'):
+        return None
+    expires_at = reset.get('expires_at')
+    if not expires_at:
+        return None
+    try:
+        if hasattr(expires_at, 'isoformat'):
+            exp_dt = expires_at
+        else:
+            exp_dt = datetime.fromisoformat(str(expires_at))
+        if datetime.utcnow() > exp_dt:
+            return None
+    except Exception:
+        return None
+    return reset
+
+
+def update_user_password(user_id, password_hash):
+    if firestore_db.is_firestore_available():
+        return firestore_db.fs_update_user(user_id, {'password': password_hash})
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET password = ? WHERE user_id = ?', (password_hash, user_id))
+    updated = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return updated > 0
+
+
+def invalidate_password_reset(token):
+    if firestore_db.is_firestore_available():
+        return firestore_db.fs_invalidate_password_reset(token)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE password_resets SET used = 1 WHERE token = ?', (token,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def is_truthy_field(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'y', 'on')
+    return False
+
+
+def user_has_admin_privilege(user):
+    if not user:
+        return False
+    if is_truthy_field(user.get('is_admin')):
+        return True
+    if is_truthy_field(user.get('admin')):
+        return True
+    role_value = user.get('role') or user.get('user_role') or user.get('access_level')
+    if isinstance(role_value, str) and role_value.strip().lower() in ('admin', 'administrator', 'superadmin', 'owner'):
+        return True
+    return False
+
+
 def is_admin_user():
     if 'user_id' not in session:
         return False
@@ -476,7 +658,7 @@ def is_admin_user():
     if not user:
         return False
     try:
-        if user.get('is_admin'):
+        if user_has_admin_privilege(user):
             return True
     except Exception:
         pass
@@ -518,7 +700,8 @@ def index():
             else:
                 safe[k] = v
         safe_products.append(safe)
-    return render_template('index.html', products=safe_products, selected_category=category or '')
+    stats = get_marketplace_stats()
+    return render_template('index.html', products=safe_products, selected_category=category or '', stats=stats)
 
 @app.route('/how-it-works')
 def how_it_works():
@@ -579,20 +762,22 @@ def product_details(product_id):
                 seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
                 seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
 
+    listing_contact_method = product.get('buyer_contact_method') or seller_contact_preference
+
     whatsapp_url = ''
     gmail_url = ''
     mailto_url = ''
     if product.get('title'):
-        if seller_phone and seller_contact_preference == 'whatsapp':
+        if seller_phone and listing_contact_method == 'whatsapp':
             text = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
             whatsapp_url = f"https://wa.me/{seller_phone}?text={quote(text)}"
-        elif seller_email and seller_contact_preference == 'email':
+        elif seller_email and listing_contact_method == 'email':
             subject = f"Interest in {product['title']}"
             body = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
             gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(seller_email)}&su={quote(subject)}&body={quote(body)}"
             mailto_url = f"mailto:{seller_email}?subject={quote(subject)}&body={quote(body)}"
 
-    return render_template('product_details.html', product=product, image_list=image_list, questions=questions, seller_phone=seller_phone, seller_email=seller_email, seller_contact_preference=seller_contact_preference, whatsapp_url=whatsapp_url, gmail_url=gmail_url, mailto_url=mailto_url)
+    return render_template('product_details.html', product=product, image_list=image_list, questions=questions, seller_phone=seller_phone, seller_email=seller_email, seller_contact_preference=listing_contact_method, whatsapp_url=whatsapp_url, gmail_url=gmail_url, mailto_url=mailto_url)
 
 @app.route('/sell', methods=['GET', 'POST'])
 def sell():
@@ -613,13 +798,15 @@ def sell():
         has_tears = request.form['has_tears']
         seller_condition = request.form['seller_condition'].strip()
         seller_city = request.form.get('seller_city', '').strip()
-        seller_province = request.form.get('seller_province', '').strip()
         seller_locality = request.form.get('seller_locality', '').strip()
         if seller_locality:
-            seller_address = f"{seller_locality}, {seller_city}, {seller_province}"
+            seller_address = f"{seller_locality}, {seller_city}"
         else:
-            seller_address = f"{seller_city}, {seller_province}"
+            seller_address = seller_city
         asking_price = float(request.form['asking_price'])
+        buyer_contact_method = request.form.get('buyer_contact_method', 'whatsapp')
+        if buyer_contact_method not in ('whatsapp', 'email'):
+            buyer_contact_method = 'whatsapp'
         image_files = request.files.getlist('images') or []
         if not image_files:
             self_image = request.files.get('image')
@@ -663,15 +850,16 @@ def sell():
             'condition_summary': condition_summary,
             'seller_id': session['user_id'],
             'status': 'available',
+            'buyer_contact_method': buyer_contact_method,
         }
 
         if firestore_db.is_firestore_available():
             product_id = firestore_db.fs_create_product(product_data)
         else:
             cursor.execute('''
-                INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id']))
+                INSERT INTO Products (title, brand, category, size, color, gender, asking_price, image_url, images, description, tags, times_worn, seller_condition, has_tears, seller_address, condition_summary, seller_id, buyer_contact_method)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, session['user_id'], buyer_contact_method))
             product_id = cursor.lastrowid
             conn.commit()
             conn.close()
@@ -695,7 +883,74 @@ def seller_listings():
         cursor = conn.cursor()
         listings = cursor.execute('SELECT * FROM Products WHERE seller_id = ?', (session['user_id'],)).fetchall()
         conn.close()
-    return render_template('seller_listings.html', listings=listings)
+    total_sold = sum(1 for listing in listings if listing.get('status') == 'sold')
+    stats = get_marketplace_stats()
+    return render_template('seller_listings.html', listings=listings, stats=stats, total_sold=total_sold)
+
+
+def get_marketplace_stats():
+    stats = {
+        'total_users': 0,
+        'active_listings': 0,
+        'sold_items': 0,
+        'questions_asked': 0,
+    }
+    if firestore_db.is_firestore_available():
+        firestore_stats = firestore_db.fs_get_stats()
+        if firestore_stats:
+            stats['total_users'] = firestore_stats.get('total_users', 0)
+            stats['active_listings'] = firestore_stats.get('active_listings', 0)
+            stats['sold_items'] = firestore_stats.get('sold_items', 0)
+            stats['questions_asked'] = firestore_stats.get('questions_asked', 0)
+            return stats
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        total_row = cursor.execute('SELECT COUNT(*) FROM users').fetchone()
+        stats['total_users'] = total_row.get('COUNT(*)', 0) if total_row else 0
+        active_row = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'available'").fetchone()
+        stats['active_listings'] = active_row.get('COUNT(*)', 0) if active_row else 0
+        sold_row = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'sold'").fetchone()
+        stats['sold_items'] = sold_row.get('COUNT(*)', 0) if sold_row else 0
+        questions_row = cursor.execute('SELECT COUNT(*) FROM questions').fetchone()
+        stats['questions_asked'] = questions_row.get('COUNT(*)', 0) if questions_row else 0
+    except Exception:
+        pass
+    conn.close()
+    return stats
+
+
+@app.route('/listing/<product_id>/mark-sold', methods=['POST'])
+def mark_sold(product_id):
+    if 'user_id' not in session:
+        flash('Please log in to manage your listings.')
+        return redirect(url_for('login'))
+
+    product = get_product_by_id(product_id)
+    if not product or product.get('seller_id') != session['user_id']:
+        flash('Unable to update the listing.')
+        return redirect(url_for('seller_listings'))
+
+    if product.get('status') == 'sold':
+        flash('This item is already marked as sold.')
+        return redirect(url_for('seller_listings'))
+
+    now = datetime.now().isoformat()
+    if firestore_db.is_firestore_available():
+        firestore_db.fs_update_product(product_id, {
+            'status': 'sold',
+            'sold_date': now,
+        })
+        firestore_db.fs_increment_stat('sold_items', 1)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE Products SET status = 'sold', sold_date = ? WHERE id = ?", (now, product_id))
+        cursor.execute('UPDATE stats SET sold_items = sold_items + 1 WHERE id = 1')
+        conn.commit()
+
+    flash('Listing marked as sold.')
+    return redirect(url_for('seller_listings'))
 
 
 @app.route('/listing/<product_id>/delete', methods=['POST'])
@@ -760,15 +1015,11 @@ def edit_listing(product_id):
 
     seller_address = product.get('seller_address', '') or ''
     parts = [p.strip() for p in seller_address.split(',')]
-    if len(parts) == 3:
-        seller_locality, seller_city, seller_province = parts
-    elif len(parts) == 2:
-        seller_city, seller_province = parts
-        seller_locality = ''
-    else:
-        seller_city = seller_address
-        seller_province = ''
-        seller_locality = ''
+    seller_city = parts[0] if parts else ''
+    seller_locality = ''
+    if len(parts) >= 2:
+        seller_locality = parts[0]
+        seller_city = parts[1]
 
     product_images = []
     if product.get('images'):
@@ -792,13 +1043,15 @@ def edit_listing(product_id):
         has_tears = request.form['has_tears']
         seller_condition = request.form['seller_condition'].strip()
         seller_city = request.form.get('seller_city', '').strip()
-        seller_province = request.form.get('seller_province', '').strip()
         seller_locality = request.form.get('seller_locality', '').strip()
         if seller_locality:
-            seller_address = f"{seller_locality}, {seller_city}, {seller_province}"
+            seller_address = f"{seller_locality}, {seller_city}"
         else:
-            seller_address = f"{seller_city}, {seller_province}"
+            seller_address = seller_city
         asking_price = float(request.form['asking_price'])
+        buyer_contact_method = request.form.get('buyer_contact_method', 'whatsapp')
+        if buyer_contact_method not in ('whatsapp', 'email'):
+            buyer_contact_method = 'whatsapp'
         image_files = request.files.getlist('images')
 
         image_paths = save_uploaded_images(image_files)
@@ -835,6 +1088,7 @@ def edit_listing(product_id):
             'condition_summary': condition_summary,
             'seller_id': session['user_id'],
             'status': product.get('status', 'available'),
+            'buyer_contact_method': buyer_contact_method,
         }
 
         if firestore_db.is_firestore_available():
@@ -845,9 +1099,9 @@ def edit_listing(product_id):
             cursor.execute('''
                 UPDATE Products SET title=?, brand=?, category=?, size=?, color=?, gender=?, asking_price=?,
                     image_url=?, images=?, description=?, tags=?, times_worn=?, seller_condition=?,
-                    has_tears=?, seller_address=?, condition_summary=?
+                    has_tears=?, seller_address=?, condition_summary=?, buyer_contact_method=?
                 WHERE id=?
-            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, product_id))
+            ''', (title, brand, category, size, color, gender, asking_price, image_url, images_json, description, tags, int(times_worn), seller_condition, has_tears, seller_address, condition_summary, buyer_contact_method, product_id))
             conn.commit()
             conn.close()
 
@@ -968,7 +1222,8 @@ def admin_dashboard():
         listings=listings,
         users=users,
         listing_counts=listing_counts,
-        current_admin_id=session.get('user_id')
+        current_admin_id=session.get('user_id'),
+        stats=get_marketplace_stats()
     )
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
@@ -1152,26 +1407,14 @@ def post_answer(product_id, question_id):
 def signup():
     if request.method == 'POST':
         name = sanitize_input(request.form.get('name', ''))
-        username = sanitize_input(request.form.get('username', ''))
         email = sanitize_input(request.form.get('email', '')).lower()
         password = request.form.get('password', '')
         phone = sanitize_input(request.form.get('phone', ''))
-        contact_preference = request.form.get('contact_preference', 'whatsapp')
-        if contact_preference not in ('whatsapp', 'email'):
-            contact_preference = 'whatsapp'
-        address = sanitize_input(request.form.get('address', ''))
-        city = sanitize_input(request.form.get('city', ''))
-        province = sanitize_input(request.form.get('province', ''))
-        postal_code = sanitize_input(request.form.get('postal_code', ''))
-        bio = sanitize_input(request.form.get('bio', ''))
 
         name_error = ''
         email_error = ''
-        username_error = ''
         password_error = ''
         phone_error = ''
-        address_error = ''
-        city_error = ''
         general_error = ''
 
         if not name:
@@ -1182,85 +1425,73 @@ def signup():
             email_error = 'Please provide a valid email address.'
         if not password:
             password_error = 'Password is required.'
-        if contact_preference == 'whatsapp' and not phone:
-            phone_error = 'Phone number is required for WhatsApp contact.'
-        if not address:
-            address_error = 'Address is required.'
-        if not city:
-            city_error = 'City is required.'
+        if not phone:
+            phone_error = 'Phone number is required.'
 
-        if not any([name_error, email_error, password_error, phone_error, address_error, city_error, username_error]):
+        if not any([name_error, email_error, password_error, phone_error]):
             if firestore_db.is_firestore_available():
                 existing = firestore_db.fs_get_user_by_email(email)
                 if existing:
                     email_error = 'An account with this email already exists.'
-                if username:
-                    existing_name = firestore_db.fs_get_user_by_email(email)
-                    if existing_name and existing_name.get('username', '').lower() == username.lower():
-                        username_error = 'This username is already taken.'
             else:
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute('SELECT user_id FROM users WHERE lower(email) = lower(?)', (email,))
                 if cursor.fetchone():
                     email_error = 'An account with this email already exists.'
-
-                if username:
-                    cursor.execute('SELECT user_id FROM users WHERE username IS NOT NULL AND lower(username) = lower(?)', (username,))
-                    if cursor.fetchone():
-                        username_error = 'This username is already taken.'
                 conn.close()
 
-        if any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
+        if any([name_error, email_error, password_error, phone_error]):
             general_error = 'Please correct the errors below.'
 
-        if not any([name_error, email_error, username_error, password_error, phone_error, address_error, city_error]):
+        if not any([name_error, email_error, password_error, phone_error]):
             password_hash = generate_password_hash(password)
             join_date = datetime.utcnow()
 
             user_data = {
                 'name': name,
-                'username': username,
                 'email': email,
                 'password': password_hash,
                 'phone': phone,
-                'address': address,
-                'street_address': address,
-                'city': city,
-                'province': province,
-                'postal_code': postal_code,
-                'bio': bio,
                 'join_date': join_date,
                 'email_verified': 0,
                 'phone_verified': 0,
-                'profile_picture': '',
-                'seller_rating': 0.0,
-                'total_sales': 0,
-                'contact_preference': contact_preference,
+                'contact_preference': 'whatsapp',
                 'contact_phone': phone,
                 'contact_email': email,
             }
 
             if firestore_db.is_firestore_available():
-                firestore_db.fs_create_user(user_data)
+                user_id = firestore_db.fs_create_user(user_data)
+                session.clear()
+                session.permanent = True
+                session['user_id'] = user_id
+                session['user_name'] = name
+                flash(f'Welcome, {name}!', 'success')
+                return redirect(url_for('index'))
             else:
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO users (name, username, email, password, phone, address, street_address, city, province, postal_code, bio, join_date, contact_preference, contact_phone, contact_email)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (name, username, email, password_hash, phone, address, address, city, province, postal_code, bio, join_date, contact_preference, phone, email))
+                    INSERT INTO users (name, email, password, phone, join_date, contact_preference, contact_phone, contact_email)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (name, email, password_hash, phone, join_date, 'whatsapp', phone, email))
                 conn.commit()
+                user_id = cursor.lastrowid
                 conn.close()
 
-            flash('Account created successfully! Please log in to continue.', 'success')
-            return redirect(url_for('login'))
+                session.clear()
+                session.permanent = True
+                session['user_id'] = user_id
+                session['user_name'] = name
+                flash(f'Welcome, {name}!', 'success')
+                return redirect(url_for('index'))
 
         return render_template('signup.html',
-            name=name, email=email, username=username,
-            name_error=name_error, email_error=email_error, username_error=username_error,
-            password_error=password_error, phone_error=phone_error, address_error=address_error,
-            city_error=city_error, general_error=general_error
+            name=name, email=email, phone=phone,
+            name_error=name_error, email_error=email_error,
+            password_error=password_error, phone_error=phone_error,
+            general_error=general_error
         )
 
     return render_template('signup.html')
@@ -1310,6 +1541,67 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = sanitize_input(request.form.get('email', '')).lower()
+        if validate_email(email):
+            user = get_user_by_email(email)
+            if user:
+                token = secrets.token_urlsafe(32)
+                created_at = datetime.utcnow()
+                expires_at = created_at + timedelta(minutes=RESET_TOKEN_EXPIRY_MINUTES)
+                if create_password_reset(user, email, token, expires_at, created_at=created_at):
+                    base_url = os.environ.get('BASE_URL') or request.host_url.rstrip('/')
+                    reset_link = base_url + url_for('reset_password', token=token)
+                    send_password_reset_email(email, reset_link)
+        flash('If an account with that email exists, a password reset link has been sent.', 'success')
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html')
+
+
+@app.route('/reset-password')
+def reset_password_missing():
+    return redirect(url_for('forgot_password'))
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    token = sanitize_input(token, max_len=128)
+    reset = verify_password_reset_token(token)
+    if not reset:
+        return render_template('reset_password.html', invalid_token=True, token=token)
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm = request.form.get('confirm_password', '')
+        password_error = ''
+        confirm_error = ''
+
+        if not password:
+            password_error = 'Password is required.'
+        elif not validate_password(password):
+            password_error = 'Password must be at least 8 characters.'
+        if not confirm:
+            confirm_error = 'Please confirm your password.'
+        elif password != confirm:
+            confirm_error = 'Passwords do not match.'
+
+        if not password_error and not confirm_error:
+            password_hash = generate_password_hash(password)
+            if update_user_password(reset['user_id'], password_hash):
+                invalidate_password_reset(token)
+                flash('Your password has been reset successfully. Please log in.', 'success')
+                return redirect(url_for('login'))
+            flash('Unable to update your password. Please try again.', 'error')
+            return redirect(url_for('reset_password', token=token))
+
+        return render_template('reset_password.html', invalid_token=False, reset=reset,
+                               password_error=password_error, confirm_error=confirm_error, token=token)
+
+    return render_template('reset_password.html', invalid_token=False, reset=reset, token=token)
 
 
 if __name__ == '__main__':

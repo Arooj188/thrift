@@ -49,6 +49,7 @@
         
         /* Homepage Info Footer Sections */
         .home-section { margin-top: 100px; padding: 60px 0; border-top: 1px solid #f2efea; scroll-margin-top: 100px; }
+        #contact { margin-top: 60px; }
         .home-section h2 { font-family: Georgia, serif; font-size: 32px; font-weight: 400; margin-bottom: 20px; }
         .home-section p { color: #555555; line-height: 1.8; font-size: 15px; max-width: 700px; }
 
@@ -211,6 +212,11 @@
             .sidebar-menu a { padding: 14px 0; min-height: 44px; }
             .sidebar-close { font-size: 30px; padding: 8px; }
         }
+
+        /* Sidebar submenu */
+        .sidebar-submenu { padding-left: 14px; }
+        .sidebar-submenu a { font-size: 14px; font-weight: 500; color: #767676; padding: 10px 0; min-height: 40px; }
+        .sidebar-submenu a:hover { color: #1c1c1c; }
     </style>
 </head>
 <body>
@@ -225,16 +231,17 @@
             <div class="sidebar-section">
                 <h3>Menu</h3>
                 <a href="/">Home</a>
-                <a href="/?category=Clothing">Browse</a>
+                <a href="/">Browse</a>
+                <div class="sidebar-submenu">
+                    <a href="/?category=Clothing">Clothing</a>
+                    <a href="/?category=Shoes">Shoes</a>
+                </div>
                 <a href="/how-it-works">How It Works</a>
-                <a href="/#about">About Our Marketplace</a>
-                <a href="/#contact">Contact & Support</a>
             </div>
             <div class="sidebar-section">
                 <h3>Account</h3>
                 {% if session.user_id %}
                     <a href="/seller/listings">My Listings</a>
-                    <a href="/account">Account Settings</a>
                     <a href="/logout">Logout</a>
                 {% else %}
                     <a href="/login">Login</a>
@@ -261,7 +268,6 @@
             {% if session.user_id %}
                 <span style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: #1c1c1c; letter-spacing: 0.5px;">Hello, {{ session.user_name }}</span>
                 <a href="/seller/listings">My Listings</a>
-                <a href="/account">Account Settings</a>
                 <a href="/logout">Logout</a>
             {% else %}
                 <a href="/login">Login</a>

@@ -30,46 +30,51 @@
         margin: 50px 0 24px 0;
     }
 
-    .hiw-cards {
+    .hiw-steps {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 20px;
     }
-    .hiw-card {
+    .hiw-step {
         background: #ffffff;
         border: 1px solid #e5e7eb;
         border-radius: 16px;
         padding: 28px;
-        opacity: 1;
-        transform: translateY(0);
         transition: transform 0.25s ease, box-shadow 0.25s ease;
     }
-    .hiw-card:hover {
+    .hiw-step:hover {
         transform: translateY(-4px);
         box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
     }
-    .hiw-card-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        background: #f2efea;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 16px;
-        color: #1c1c1c;
+    .hiw-step-number {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #767676;
+        margin-bottom: 10px;
     }
-    .hiw-card h3 {
-        margin: 0 0 8px 0;
+    .hiw-step h3 {
+        margin: 0 0 10px 0;
         font-size: 18px;
         font-weight: 700;
         color: #1c1c1c;
     }
-    .hiw-card p {
+    .hiw-step p {
         margin: 0;
         font-size: 14px;
         line-height: 1.6;
         color: #555555;
+    }
+    .hiw-step ul {
+        margin: 10px 0 0 0;
+        padding-left: 18px;
+        color: #555555;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    .hiw-step li {
+        margin-bottom: 4px;
     }
 
     .hiw-faq {
@@ -83,8 +88,6 @@
         border: 1px solid #e5e7eb;
         border-radius: 16px;
         padding: 24px;
-        opacity: 1;
-        transform: translateY(0);
         transition: transform 0.25s ease, box-shadow 0.25s ease;
     }
     .hiw-faq-item:hover {
@@ -137,7 +140,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .hiw-card, .hiw-faq-item {
+        .hiw-step, .hiw-faq-item {
             transition: none;
         }
     }
@@ -149,54 +152,11 @@
 
         .hiw-section-title { margin: 20px 0 14px 0; }
 
-        .hiw-cards { grid-template-columns: 1fr; gap: 16px; }
-        .hiw-card {
-            width: 94%;
-            margin: 0 auto;
-            padding: 18px;
-            display: grid;
-            grid-template-columns: 44px 1fr;
-            grid-template-rows: auto auto;
-            gap: 2px 12px;
-            align-items: center;
-            transition: none;
-        }
-        .hiw-card:hover {
-            transform: none;
-            box-shadow: none;
-        }
-        .hiw-card-icon {
-            width: 44px;
-            height: 44px;
-            margin-bottom: 0;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .hiw-card-icon svg { width: 22px; height: 22px; }
-        .hiw-card h3 {
-            margin: 0;
-            font-size: 16px;
-            font-weight: 700;
-            line-height: 1.3;
-        }
-        .hiw-card p {
-            grid-column: 1 / -1;
-            margin: 4px 0 0 0;
-            font-size: 14px;
-            line-height: 1.6;
-        }
+        .hiw-steps { grid-template-columns: 1fr; gap: 16px; }
+        .hiw-step { padding: 18px; }
 
         .hiw-faq { grid-template-columns: 1fr; gap: 16px; }
-        .hiw-faq-item {
-            padding: 18px;
-            transition: none;
-        }
-        .hiw-faq-item:hover {
-            transform: none;
-            box-shadow: none;
-        }
+        .hiw-faq-item { padding: 18px; }
 
         .hiw-cta { margin: 40px 0 20px 0; padding: 32px 24px; border-radius: 16px; }
         .hiw-cta h2 { font-size: 22px; }
@@ -206,70 +166,91 @@
 
 <div class="hiw-hero">
     <h1>How It Works</h1>
-    <p>Buy and sell pre-loved fashion across Pakistan.</p>
+    <p>Buy and sell pre-loved fashion across Pakistan in a few simple steps.</p>
 </div>
 
-<h2 class="hiw-section-title">The Marketplace Flow</h2>
+<h2 class="hiw-section-title">Marketplace Flow</h2>
 
-<div class="hiw-cards">
-    <div class="hiw-card">
-        <div class="hiw-card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-            </svg>
-        </div>
-        <h3>List Your Item</h3>
-        <p> Upload clear photos, add an accurate description, choose the item's condition and price, then publish your listing for buyers across Pakistan to discover.</p>
+<div class="hiw-steps">
+    <div class="hiw-step">
+        <div class="hiw-step-number">Step 1</div>
+        <h3>Create an Account</h3>
+        <p>Create a free account using your name, email, password, and WhatsApp number.</p>
+        <ul>
+            <li>List items for sale</li>
+            <li>Contact sellers</li>
+            <li>Manage your own listings</li>
+        </ul>
     </div>
 
-    <div class="hiw-card">
-        <div class="hiw-card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 013 21V12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-            </svg>
-        </div>
-        <h3>Connect with Buyers</h3>
-        <p>Interested buyers can browse listings, ask questions, or contact you directly using your preferred contact method to discuss the item and arrange a purchase.</p>
+    <div class="hiw-step">
+        <div class="hiw-step-number">Step 2</div>
+        <h3>Browse or List Items</h3>
+        <p>Buyers can browse all publicly available listings. Sellers can create listings by adding photos, item details, condition, price, and preferred buyer contact method.</p>
     </div>
 
-    <div class="hiw-card">
-        <div class="hiw-card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-            </svg>
-        </div>
+    <div class="hiw-step">
+        <div class="hiw-step-number">Step 3</div>
+        <h3>Contact the Seller</h3>
+        <p>Only registered and logged-in users can contact sellers. This helps protect sellers' privacy and reduces spam. Buyers simply log in, choose a listing, and contact the seller using the seller's preferred contact method.</p>
+    </div>
+
+    <div class="hiw-step">
+        <div class="hiw-step-number">Step 4</div>
         <h3>Complete the Exchange</h3>
-        <p>Once both parties agree, decide on a convenient payment and delivery or meetup method. Thrift simply connects buyers and sellers—we don't process payments or handle shipping.</p>
+        <p>Once both parties agree, arrange payment directly, decide on delivery or meetup, and mark the transaction as complete. Thrift does not process payments or shipping.</p>
     </div>
+</div>
+
+<h2 class="hiw-section-title">Seller Responsibility</h2>
+
+<div class="hiw-step" style="max-width: 100%;">
+    <p>Once an item is sold, mark it as sold or remove the listing so buyers know it is no longer available.</p>
+</div>
+
+<h2 class="hiw-section-title">Community & Safety</h2>
+
+<div class="hiw-step" style="max-width: 100%;">
+    <p>To keep the marketplace safe for everyone:</p>
+    <ul>
+        <li>Buyers must create an account before contacting sellers.</li>
+        <li>Sellers should provide accurate descriptions and photos.</li>
+        <li>Thrift reserves the right to remove listings that are misleading, inappropriate, fraudulent, prohibited, or violate the platform's guidelines.</li>
+    </ul>
 </div>
 
 <h2 class="hiw-section-title">FAQ</h2>
 
 <div class="hiw-faq">
     <div class="hiw-faq-item">
-        <h4>How do I create an account?</h4>
-        <p>Click Sign Up, complete the registration form, and you'll be ready to start buying or selling in just a few minutes.</p>
+        <h4>Do I need an account to contact a seller?</h4>
+        <p>Yes. You can browse listings without an account, but you must sign up or log in before contacting any seller.</p>
     </div>
 
     <div class="hiw-faq-item">
         <h4>How do I list an item?</h4>
-        <p>Go to List Item for Sale, upload your photos, add the item details, set your price, and publish your listing instantly.</p>
+        <p>Click "List Item for Sale", complete the form, upload photos, and publish.</p>
     </div>
 
     <div class="hiw-faq-item">
-        <h4>How does payment work?</h4>
-        <p>Payments are arranged directly between buyers and sellers. We recommend using secure payment methods and confirming all details before completing a transaction.</p>
+        <h4>How are payments handled?</h4>
+        <p>Payments are arranged directly between buyers and sellers. Thrift does not process payments.</p>
     </div>
 
     <div class="hiw-faq-item">
         <h4>Does Thrift charge any fees?</h4>
-        <p>No. Thrift does not charge any platform fees. Sellers keep 100% of the agreed selling price.</p>
+        <p>No. Listing items and using the marketplace is completely free.</p>
+    </div>
+
+    <div class="hiw-faq-item">
+        <h4>What happens after I sell my item?</h4>
+        <p>Mark the listing as sold or delete it so other buyers know it is no longer available.</p>
     </div>
 </div>
 
 <div class="hiw-cta">
-    <h2>Ready to Start?</h2>
-    <p>Join our marketplace today and start buying or selling pre-loved fashion across Pakistan.</p>
+    <h2>Ready to Get Started?</h2>
+    <p>Create your free account and start buying or selling pre-loved fashion today.</p>
     {% if session.user_id %}
         <a href="{{ url_for('sell') }}" class="btn-sell">Start Selling</a>
     {% else %}

@@ -277,10 +277,6 @@
                 <label>City <span class="required-star">*</span></label>
                 <input type="text" name="seller_city" required placeholder="e.g. Lahore">
             </div>
-            <div class="sell-form-group">
-                <label>Province <span class="required-star">*</span></label>
-                <input type="text" name="seller_province" required placeholder="e.g. Punjab">
-            </div>
         </div>
 
         <div class="sell-form-group">
@@ -291,6 +287,23 @@
         <div class="sell-form-group">
             <label>Asking Price (Rs.) <span class="required-star">*</span></label>
             <input type="number" name="asking_price" required placeholder="e.g. 1500">
+        </div>
+
+        <div class="sell-section-title">Buyer Contact Method</div>
+
+        <div class="sell-form-group">
+            <label>Buyer Contact Method <span class="required-star">*</span></label>
+            <div style="display: flex; gap: 16px; margin-top: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="radio" name="buyer_contact_method" value="whatsapp" checked style="width: 16px; height: 16px;">
+                    <span>WhatsApp</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="radio" name="buyer_contact_method" value="email" style="width: 16px; height: 16px;">
+                    <span>Email</span>
+                </label>
+            </div>
+            <p style="font-size: 12px; color: #767676; margin-top: 8px;">This choice only applies to this listing and can be different for future listings.</p>
         </div>
 
         <div class="sell-section-title">Photos</div>

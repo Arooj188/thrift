@@ -120,6 +120,26 @@
   </aside>
 
   <main class="admin-main">
+    <h1 style="font-size: 24px; font-weight: 800; margin: 0 0 20px 0;">Dashboard</h1>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 30px;">
+      <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px;">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin-bottom: 8px;">Total Users</div>
+        <div style="font-size: 28px; font-weight: 800; color: #1c1c1c;">{{ stats.total_users }}</div>
+      </div>
+      <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px;">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin-bottom: 8px;">Active Listings</div>
+        <div style="font-size: 28px; font-weight: 800; color: #1c1c1c;">{{ stats.active_listings }}</div>
+      </div>
+      <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px;">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin-bottom: 8px;">Sold Items</div>
+        <div style="font-size: 28px; font-weight: 800; color: #1c1c1c;">{{ stats.sold_items }}</div>
+      </div>
+      <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px;">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin-bottom: 8px;">Questions Asked</div>
+        <div style="font-size: 28px; font-weight: 800; color: #1c1c1c;">{{ stats.questions_asked }}</div>
+      </div>
+    </div>
+
     <div class="admin-section active" id="section-listings" style="{% if section != 'listings' %}display: none;{% endif %}">
       <h1 style="font-size: 24px; font-weight: 800; margin: 0 0 20px 0;">Listings</h1>
       {% if not listings %}

@@ -7,9 +7,19 @@ try:
     import firebase_admin
     from firebase_admin import credentials, firestore
     if not firebase_admin._apps:
-        cred_path = os.environ.get('FIREBASE_CREDENTIALS', '/home/Aroojatif/thrift/serviceAccountKey.json')
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
+        cred_path = os.environ.get('FIREBASE_CREDENTIALS')
+        if cred_path and os.path.exists(cred_path):
+            cred = credentials.Certificate(cred_path)
+        else:
+            default_path = '/home/Aroojatif/thrift/serviceAccountKey.json'
+            if os.path.exists(default_path):
+                cred = credentials.Certificate(default_path)
+            else:
+                cred = None
+        if cred is not None:
+            firebase_admin.initialize_app(cred)
+        else:
+            raise Exception('No Firebase credentials found. Set FIREBASE_CREDENTIALS or place serviceAccountKey.json at /home/Aroojatif/thrift/serviceAccountKey.json')
     _db = firestore.client()
     _FIRESTORE_AVAILABLE = True
 except Exception as e:
@@ -293,6 +303,56 @@ def fs_get_all_messages():
 
 
 # ============================
+# Password reset helpers
+# ============================
+
+def fs_create_password_reset(data):
+    if not is_firestore_available():
+        return None
+    try:
+        token = data.get('token')
+        if not token:
+            return None
+        _db.collection('password_resets').document(str(token)).set({
+            'token': token,
+            'user_id': data.get('user_id'),
+            'email': data.get('email'),
+            'created_at': data.get('created_at'),
+            'expires_at': data.get('expires_at'),
+            'used': bool(data.get('used', False)),
+        })
+        return token
+    except Exception as e:
+        logging.error(f"Firestore create_password_reset error: {e}")
+        return None
+
+
+def fs_get_password_reset(token):
+    if not is_firestore_available():
+        return None
+    try:
+        doc = _db.collection('password_resets').document(str(token)).get()
+        if doc.exists:
+            data = doc.to_dict()
+            data['token'] = doc.id
+            return data
+    except Exception as e:
+        logging.error(f"Firestore get_password_reset error: {e}")
+    return None
+
+
+def fs_invalidate_password_reset(token):
+    if not is_firestore_available():
+        return False
+    try:
+        _db.collection('password_resets').document(str(token)).set({'used': True}, merge=True)
+        return True
+    except Exception as e:
+        logging.error(f"Firestore invalidate_password_reset error: {e}")
+        return False
+
+
+# ============================
 # Migration
 # ============================
 
@@ -390,3 +450,51 @@ def migrate_to_firestore():
     conn.close()
     logging.info("Migration complete")
     return True
+
+
+# ============================
+# Stats helpers
+# ============================
+
+def fs_get_stats():
+    if not is_firestore_available():
+        return None
+    try:
+        doc = _db.collection('stats').document('marketplace').get()
+        if doc.exists:
+            return doc.to_dict()
+    except Exception as e:
+        logging.error(f"Firestore get_stats error: {e}")
+    return None
+
+
+def fs_increment_stat(field, amount=1):
+    if not is_firestore_available():
+        return False
+    try:
+        _db.collection('stats').document('marketplace').set({
+            field: firestore.Increment(amount)
+        }, merge=True)
+        return True
+    except Exception as e:
+        logging.error(f"Firestore increment_stat error: {e}")
+        return False
+
+
+def fs_init_stats():
+    if not is_firestore_available():
+        return False
+    try:
+        doc_ref = _db.collection('stats').document('marketplace')
+        if not doc_ref.get().exists:
+            doc_ref.set({
+                'total_users': 0,
+                'active_listings': 0,
+                'sold_items': 0,
+                'questions_asked': 0,
+            })
+        return True
+    except Exception as e:
+        logging.error(f"Firestore init_stats error: {e}")
+        return False
+

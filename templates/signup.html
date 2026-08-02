@@ -16,13 +16,6 @@
             {% endif %}
         </div>
         <div style="margin-bottom: 15px;">
-            <label>Username</label>
-            <input type="text" name="username" placeholder="Optional" value="{{ username|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid {{ '#dc2626' if username_error else '#dcd7ce' }}; border-radius: 8px; background-color: #fbf9f6;">
-            {% if username_error %}
-            <div class="field-error">{{ username_error }}</div>
-            {% endif %}
-        </div>
-        <div style="margin-bottom: 15px;">
             <label>Email Address <span class="required-star">*</span></label>
             <input type="email" name="email" required value="{{ email|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid {{ '#dc2626' if email_error else '#dcd7ce' }}; border-radius: 8px; background-color: #fbf9f6;">
             {% if email_error %}
@@ -54,47 +47,6 @@
             {% if phone_error %}
             <div class="field-error">{{ phone_error }}</div>
             {% endif %}
-        </div>
-        <div style="margin-bottom: 15px;">
-            <label>Preferred Contact Method <span class="required-star">*</span></label>
-            <div style="display: flex; gap: 16px; margin-top: 8px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="radio" name="contact_preference" value="whatsapp" checked style="width: 16px; height: 16px;">
-                    <span>WhatsApp</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="radio" name="contact_preference" value="email" style="width: 16px; height: 16px;">
-                    <span>Email</span>
-                </label>
-            </div>
-        </div>
-        <div style="margin-bottom: 15px;">
-            <label>Address <span class="required-star">*</span></label>
-            <textarea name="address" required style="width: 100%; padding: 8px; margin-top: 5px; height: 60px; border: 1px solid {{ '#dc2626' if address_error else '#dcd7ce' }}; border-radius: 8px; background-color: #fbf9f6;">{{ address|default('') }}</textarea>
-            {% if address_error %}
-            <div class="field-error">{{ address_error }}</div>
-            {% endif %}
-        </div>
-        <div style="margin-bottom: 15px; display:flex; gap:20px;">
-            <div style="flex:1;">
-                <label>City <span class="required-star">*</span></label>
-                <input type="text" name="city" placeholder="e.g., Lahore" required value="{{ city|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid {{ '#dc2626' if city_error else '#dcd7ce' }}; border-radius: 8px; background-color: #fbf9f6;">
-                {% if city_error %}
-                <div class="field-error">{{ city_error }}</div>
-                {% endif %}
-            </div>
-            <div style="flex:1;">
-                <label>Province</label>
-                <input type="text" name="province" placeholder="e.g., Punjab" value="{{ province|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #dcd7ce; border-radius: 8px; background-color: #fbf9f6;">
-            </div>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <label>Postal Code</label>
-            <input type="text" name="postal_code" placeholder="e.g., 54000" value="{{ postal_code|default('') }}" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #dcd7ce; border-radius: 8px; background-color: #fbf9f6;">
-        </div>
-        <div style="margin-bottom: 20px;">
-            <label>Short Seller Bio</label>
-            <textarea name="bio" placeholder="Tell buyers what makes your closet special." style="width: 100%; padding: 8px; margin-top: 5px; height: 60px; border: 1px solid #dcd7ce; border-radius: 8px; background-color: #fbf9f6;">{{ bio|default('') }}</textarea>
         </div>
         <button type="submit" style="background: black; color: white; border: none; padding: 12px; width: 100%; cursor: pointer; border-radius: 999px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Register</button>
     </form>
