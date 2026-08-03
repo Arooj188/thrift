@@ -1039,8 +1039,17 @@ def edit_listing(product_id):
         flash('Please log in to edit your listing.')
         return redirect(url_for('login'))
 
-    product = get_product_by_id(product_id)
-    if not product or product['seller_id'] != session['user_id']:
+    if firestore_db.is_firestore_available():
+        product = firestore_db.fs_get_product(product_id)
+    else:
+        product = get_product_by_id(product_id)
+
+    if not product:
+        flash('Listing not found or you do not have permission to edit it.')
+        return redirect(url_for('seller_listings'))
+
+    owner_id = product.get('seller_id') or product.get('owner_id')
+    if owner_id != session['user_id']:
         flash('Listing not found or you do not have permission to edit it.')
         return redirect(url_for('seller_listings'))
     if product.get('status') == 'sold':
@@ -1243,7 +1252,7 @@ def admin_dashboard():
         try:
             db = firestore_db.get_firestore_db()
             if db is not None:
-                listings_ref = db.collection('Products').order_by('created_at', direction='DESCENDING')
+                listings_ref = db.collection('Products')
                 listings_query = listings_ref
                 if listing_status == 'available':
                     listings_query = listings_ref.where('status', '==', 'available')
@@ -1258,7 +1267,7 @@ def admin_dashboard():
                             continue
                     listings.append(p)
 
-                users_query = db.collection('users').order_by('join_date', direction='DESCENDING')
+                users_query = db.collection('users')
                 for doc in users_query.stream():
                     u = doc.to_dict()
                     u['user_id'] = int(doc.id) if doc.id.isdigit() else doc.id
@@ -1268,6 +1277,9 @@ def admin_dashboard():
                         if user_search.lower() not in name and user_search.lower() not in email:
                             continue
                     users.append(u)
+
+                listings.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
+                users.sort(key=lambda x: str(x.get('join_date') or ''), reverse=True)
 
                 seller_counts = {}
                 for p in listings:
@@ -1290,7 +1302,7 @@ def admin_dashboard():
             logging.error(f"Admin dashboard Firestore error: {e}")
             backend = 'error'
 
-    if backend == 'error' or not firestore_db.is_firestore_available() or (backend == 'firestore' and not listings):
+    if not firestore_db.is_firestore_available():
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
