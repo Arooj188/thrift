@@ -193,7 +193,8 @@
                 </td>
                 <td style="color: #767676; font-size: 13px;">{{ l.created_at or '–' }}</td>
                 <td>
-                  <form action="/admin/listing/{{ l.id }}/delete" method="POST" onsubmit="return confirm('Delete listing? This action cannot be undone.');">
+                  <a href="/listing/{{ l.id }}" class="btn-submit" style="padding: 8px 14px; font-size: 13px; margin-right: 8px; display: inline-block; border-radius: 8px;">View</a>
+                  <form action="/admin/listing/{{ l.id }}/delete" method="POST" onsubmit="return confirm('Delete listing? This action cannot be undone.');" style="display: inline;">
                     <button type="submit" class="btn-danger">Delete</button>
                   </form>
                 </td>

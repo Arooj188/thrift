@@ -1142,7 +1142,7 @@ def edit_listing(product_id):
         flash('Listing updated successfully.')
         return redirect(url_for('seller_listings'))
 
-    return render_template('edit_listing.html', product=product, seller_city=seller_city, seller_province=seller_province, seller_locality=seller_locality, product_images=product_images)
+    return render_template('edit_listing.html', product=product, seller_city=seller_city, seller_locality=seller_locality, product_images=product_images)
 
 
 @app.route('/account', methods=['GET', 'POST'])
@@ -1226,7 +1226,6 @@ def admin_dashboard():
     listing_status = request.args.get('listing_status', 'all')
     if section == 'sold':
         listing_status = 'sold'
-        section = 'listings'
 
     stats = {
         'total_users': 0,
@@ -1291,7 +1290,7 @@ def admin_dashboard():
             logging.error(f"Admin dashboard Firestore error: {e}")
             backend = 'error'
 
-    if backend == 'error' or not firestore_db.is_firestore_available():
+    if backend == 'error' or not firestore_db.is_firestore_available() or (backend == 'firestore' and not listings):
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
