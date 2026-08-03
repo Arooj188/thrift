@@ -1257,13 +1257,13 @@ def admin_dashboard():
                 listing_counts = seller_counts
 
                 users_count_snapshot = db.collection('users').count().get()
-                stats['total_users'] = users_count_snapshot[0][0] if users_count_snapshot else 0
+                stats['total_users'] = users_count_snapshot[0].value if users_count_snapshot else 0
                 active_snapshot = db.collection('Products').where('status', '==', 'available').count().get()
-                stats['active_listings'] = active_snapshot[0][0] if active_snapshot else 0
+                stats['active_listings'] = active_snapshot[0].value if active_snapshot else 0
                 sold_snapshot = db.collection('Products').where('status', '==', 'sold').count().get()
-                stats['sold_items'] = sold_snapshot[0][0] if sold_snapshot else 0
+                stats['sold_items'] = sold_snapshot[0].value if sold_snapshot else 0
                 questions_snapshot = db.collection('questions').count().get()
-                stats['questions_asked'] = questions_snapshot[0][0] if questions_snapshot else 0
+                stats['questions_asked'] = questions_snapshot[0].value if questions_snapshot else 0
 
                 backend = 'firestore'
         except Exception as e:
