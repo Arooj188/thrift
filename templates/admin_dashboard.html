@@ -115,6 +115,7 @@
     <h2>Admin Panel</h2>
     <nav class="admin-nav">
       <a href="/admin?section=listings" class="{% if section == 'listings' %}active{% endif %}">Listings</a>
+      <a href="/admin?section=sold" class="{% if section == 'sold' %}active{% endif %}">Sold Items</a>
       <a href="/admin?section=users" class="{% if section == 'users' %}active{% endif %}">Users</a>
     </nav>
   </aside>
@@ -140,8 +141,18 @@
       </div>
     </div>
 
-    <div class="admin-section active" id="section-listings" style="{% if section != 'listings' %}display: none;{% endif %}">
+    <div class="admin-section active" id="section-listings" style="{% if section not in ['listings', 'sold'] %}display: none;{% endif %}">
       <h1 style="font-size: 24px; font-weight: 800; margin: 0 0 20px 0;">Listings</h1>
+      <form method="GET" action="/admin" style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
+        <input type="hidden" name="section" value="listings">
+        <input type="text" name="listing_search" value="{{ listing_search or '' }}" placeholder="Search by title..." style="flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #dcd7ce; border-radius: 8px; font-family: inherit; font-size: 14px;">
+        <select name="listing_status" style="padding: 10px 14px; border: 1px solid #dcd7ce; border-radius: 8px; font-family: inherit; font-size: 14px;">
+          <option value="all" {% if listing_status == 'all' %}selected{% endif %}>All Statuses</option>
+          <option value="available" {% if listing_status == 'available' %}selected{% endif %}>Available</option>
+          <option value="sold" {% if listing_status == 'sold' %}selected{% endif %}>Sold</option>
+        </select>
+        <button type="submit" class="btn-submit" style="padding: 10px 20px;">Filter</button>
+      </form>
       {% if not listings %}
         <p style="color: #767676;">No listings found.</p>
       {% else %}
@@ -192,6 +203,11 @@
 
     <div class="admin-section" id="section-users" style="{% if section != 'users' %}display: none;{% endif %}">
       <h1 style="font-size: 24px; font-weight: 800; margin: 0 0 20px 0;">Users</h1>
+      <form method="GET" action="/admin" style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
+        <input type="hidden" name="section" value="users">
+        <input type="text" name="user_search" value="{{ user_search or '' }}" placeholder="Search by name or email..." style="flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #dcd7ce; border-radius: 8px; font-family: inherit; font-size: 14px;">
+        <button type="submit" class="btn-submit" style="padding: 10px 20px;">Search</button>
+      </form>
       {% if not users %}
         <p style="color: #767676;">No users found.</p>
       {% else %}

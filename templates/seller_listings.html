@@ -211,9 +211,6 @@
                     <div class="actions">
                         {% if listing.status == 'sold' %}
                             <span class="sold-badge">Sold</span>
-                            {% if listing.sold_date %}
-                                <p class="status-line" style="margin-top: 6px;">✓ Sold on {{ listing.sold_date|format_sold_date }}</p>
-                            {% endif %}
                         {% else %}
                             <a href="/listing/{{ listing.id }}/edit" class="btn-edit" style="margin-bottom: 8px; display: inline-block;">Edit</a>
                             <form action="/listing/{{ listing.id }}/mark-sold" method="POST" onsubmit="return confirm('Are you sure you want to mark this item as sold?\n\nThis will remove it from the public marketplace.');" style="margin-bottom: 8px;">

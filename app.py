@@ -300,6 +300,7 @@ def ensure_schema():
         ("is_email_verified", "INTEGER DEFAULT 0"),
         ("is_phone_verified", "INTEGER DEFAULT 0"),
         ("street_address", "TEXT DEFAULT ''"),
+        ("city", "TEXT DEFAULT ''"),
         ("province", "TEXT DEFAULT ''"),
         ("postal_code", "TEXT DEFAULT ''"),
         ("profile_picture", "TEXT DEFAULT ''"),
@@ -713,6 +714,9 @@ def product_details(product_id):
     if not product:
         flash("Product not found!")
         return redirect(url_for('index'))
+    if product.get('status') == 'sold':
+        flash('This item has been sold and is no longer available.')
+        return redirect(url_for('index'))
     image_list = []
     if product.get('images'):
         try:
@@ -752,7 +756,7 @@ def product_details(product_id):
             seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
             seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
             seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
-        elif not firestore_db.is_firestore_available():
+        else:
             conn = get_db_connection()
             cursor = conn.cursor()
             seller_row = cursor.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
@@ -964,8 +968,12 @@ def delete_listing(product_id):
         flash('Unable to delete the listing.')
         return redirect(url_for('seller_listings'))
 
+    was_sold = product.get('status') == 'sold'
+
     if firestore_db.is_firestore_available():
         firestore_db.fs_delete_product(product_id)
+        if was_sold:
+            firestore_db.fs_increment_stat('sold_items', -1)
 
     # attempt to remove local image files if present
     try:
@@ -994,6 +1002,8 @@ def delete_listing(product_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    if was_sold:
+        cursor.execute('UPDATE stats SET sold_items = sold_items - 1 WHERE id = 1')
     cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
     conn.commit()
     conn.close()
@@ -1011,6 +1021,9 @@ def edit_listing(product_id):
     product = get_product_by_id(product_id)
     if not product or product['seller_id'] != session['user_id']:
         flash('Listing not found or you do not have permission to edit it.')
+        return redirect(url_for('seller_listings'))
+    if product.get('status') == 'sold':
+        flash('Sold listings cannot be edited.')
         return redirect(url_for('seller_listings'))
 
     seller_address = product.get('seller_address', '') or ''
@@ -1164,7 +1177,8 @@ def account_settings():
             else:
                 conn = get_db_connection()
                 cursor = conn.cursor()
-                cursor.execute('UPDATE users SET contact_preference = ?, contact_phone = ?, contact_email = ? WHERE user_id = ?', (contact_preference, contact_phone, contact_email, session['user_id']))
+                cursor.execute('UPDATE users SET contact_preference = ?, contact_phone = ?, contact_email = ? WHERE user_id = ?',
+                    (contact_preference, contact_phone, contact_email, session['user_id']))
                 conn.commit()
                 conn.close()
 
@@ -1184,46 +1198,110 @@ def admin_dashboard():
     guard = require_admin()
     if guard is not None:
         return guard
-    
+
     section = request.args.get('section', 'listings')
+    user_search = (request.args.get('user_search') or '').strip()
+    listing_search = (request.args.get('listing_search') or '').strip()
+    listing_status = request.args.get('listing_status', 'all')
+    if section == 'sold':
+        listing_status = 'sold'
+    stats = {
+        'total_users': 0,
+        'active_listings': 0,
+        'sold_items': 0,
+        'questions_asked': 0,
+    }
+
     if firestore_db.is_firestore_available():
         db = firestore_db.get_firestore_db()
         listings = []
         users = []
         listing_counts = {}
         try:
-            for doc in db.collection('Products').order_by('created_at', direction='DESCENDING').stream():
+            listings_ref = db.collection('Products').order_by('created_at', direction='DESCENDING')
+            listings_query = listings_ref
+            if listing_status == 'available':
+                listings_query = listings_ref.where('status', '==', 'available')
+            elif listing_status == 'sold':
+                listings_query = listings_ref.where('status', '==', 'sold')
+            for doc in listings_query.stream():
                 p = doc.to_dict()
                 p['id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                if listing_search:
+                    title = (p.get('title') or '').lower()
+                    if listing_search.lower() not in title:
+                        continue
                 listings.append(p)
-            for doc in db.collection('users').order_by('join_date', direction='DESCENDING').stream():
+
+            users_query = db.collection('users').order_by('join_date', direction='DESCENDING')
+            for doc in users_query.stream():
                 u = doc.to_dict()
                 u['user_id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                if user_search:
+                    name = (u.get('name') or '').lower()
+                    email = (u.get('email') or '').lower()
+                    if user_search.lower() not in name and user_search.lower() not in email:
+                        continue
                 users.append(u)
+
             seller_counts = {}
             for p in listings:
                 sid = p.get('seller_id')
                 if sid:
                     seller_counts[sid] = seller_counts.get(sid, 0) + 1
             listing_counts = seller_counts
-        except Exception:
-            pass
+
+            stats['total_users'] = db.collection('users').count().get().count
+            stats['active_listings'] = db.collection('Products').where('status', '==', 'available').count().get().count
+            stats['sold_items'] = db.collection('Products').where('status', '==', 'sold').count().get().count
+            stats['questions_asked'] = db.collection('questions').count().get().count
+        except Exception as e:
+            logging.error(f"Admin dashboard Firestore error: {e}")
+            flash('Error loading dashboard data from Firestore.', 'error')
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
-        listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
-        users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
-        listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
-        listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
+        try:
+            if section == 'users' and user_search:
+                users = [dict(row) for row in cursor.execute(
+                    'SELECT * FROM users WHERE lower(name) LIKE ? OR lower(email) LIKE ? ORDER BY join_date DESC',
+                    (f'%{user_search.lower()}%', f'%{user_search.lower()}%')
+                ).fetchall()]
+            else:
+                users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
+
+            if section == 'listings':
+                if listing_status == 'available':
+                    listings = [dict(row) for row in cursor.execute("SELECT * FROM Products WHERE status = 'available' ORDER BY created_at DESC").fetchall()]
+                elif listing_status == 'sold':
+                    listings = [dict(row) for row in cursor.execute("SELECT * FROM Products WHERE status = 'sold' ORDER BY created_at DESC").fetchall()]
+                else:
+                    listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
+                if listing_search:
+                    listings = [l for l in listings if listing_search.lower() in (l.get('title') or '').lower()]
+
+            listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
+            listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
+
+            stats['total_users'] = cursor.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+            stats['active_listings'] = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'available'").fetchone()[0]
+            stats['sold_items'] = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'sold'").fetchone()[0]
+            stats['questions_asked'] = cursor.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
+        except Exception as e:
+            logging.error(f"Admin dashboard SQLite error: {e}")
+            flash('Error loading dashboard data.', 'error')
         conn.close()
-    
+
     return render_template('admin_dashboard.html',
         section=section,
         listings=listings,
         users=users,
         listing_counts=listing_counts,
         current_admin_id=session.get('user_id'),
-        stats=get_marketplace_stats()
+        stats=stats,
+        user_search=user_search,
+        listing_search=listing_search,
+        listing_status=listing_status,
     )
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
@@ -1254,6 +1332,15 @@ def admin_delete_user(user_id):
             answers_query = db.collection('answers').where('user_id', '==', user_id).stream()
             for doc in answers_query:
                 doc.reference.delete()
+
+            orders_query = db.collection('orders').where('buyer_id', '==', user_id).stream()
+            for doc in orders_query:
+                doc.reference.delete()
+            orders_query = db.collection('orders').where('seller_id', '==', user_id).stream()
+            for doc in orders_query:
+                doc.reference.delete()
+
+            firestore_db.fs_increment_stat('total_users', -1)
         except Exception:
             pass
 
@@ -1262,6 +1349,8 @@ def admin_delete_user(user_id):
     cursor.execute('DELETE FROM answers WHERE user_id = ?', (user_id,))
     cursor.execute('DELETE FROM questions WHERE user_id = ?', (user_id,))
     cursor.execute('DELETE FROM Products WHERE seller_id = ?', (user_id,))
+    cursor.execute('DELETE FROM orders WHERE buyer_id = ? OR seller_id = ?', (user_id, user_id))
+    cursor.execute('UPDATE stats SET total_users = total_users - 1 WHERE id = 1')
     cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
@@ -1278,8 +1367,11 @@ def admin_delete_listing(product_id):
     if not product:
         flash('Listing not found.')
         return redirect(url_for('admin_dashboard', section='listings'))
+    was_sold = product.get('status') == 'sold'
     if firestore_db.is_firestore_available():
         firestore_db.fs_delete_product(product_id)
+        if was_sold:
+            firestore_db.fs_increment_stat('sold_items', -1)
     try:
         images = []
         if product.get('images'):
@@ -1304,6 +1396,8 @@ def admin_delete_listing(product_id):
         pass
     conn = get_db_connection()
     cursor = conn.cursor()
+    if was_sold:
+        cursor.execute('UPDATE stats SET sold_items = sold_items - 1 WHERE id = 1')
     cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
     conn.commit()
     conn.close()
@@ -1463,6 +1557,7 @@ def signup():
 
             if firestore_db.is_firestore_available():
                 user_id = firestore_db.fs_create_user(user_data)
+                firestore_db.fs_increment_stat('total_users', 1)
                 session.clear()
                 session.permanent = True
                 session['user_id'] = user_id
@@ -1476,6 +1571,7 @@ def signup():
                     INSERT INTO users (name, email, password, phone, join_date, contact_preference, contact_phone, contact_email)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (name, email, password_hash, phone, join_date, 'whatsapp', phone, email))
+                cursor.execute('UPDATE stats SET total_users = total_users + 1 WHERE id = 1')
                 conn.commit()
                 user_id = cursor.lastrowid
                 conn.close()

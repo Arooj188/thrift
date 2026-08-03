@@ -61,13 +61,13 @@
                 <input type="number" id="priceMax" placeholder="Max" min="0">
             </div>
         </div>
-        <div class="filter-group" id="groupSize">
-            <label>Size</label>
-            <select id="filterSize"><option value="">Any</option></select>
+        <div class="filter-group" id="groupBrand">
+            <label>Brand</label>
+            <input type="text" id="filterBrand" placeholder="Search brand...">
         </div>
         <div class="filter-group" id="groupColor">
             <label>Colour</label>
-            <select id="filterColor"><option value="">Any</option></select>
+            <input type="text" id="filterColor" placeholder="Search color...">
         </div>
     </div>
     <div class="filter-panel__footer">
@@ -88,7 +88,7 @@
         let viewMode = localStorage.getItem('thriftViewMode') || 'large';
         
         const filters = {
-            size: null,
+            brand: null,
             color: null,
             minPrice: null,
             maxPrice: null
@@ -165,8 +165,8 @@
         function applyFilters() {
             const filtered = allProducts.filter(p => {
                 if (activeCategory && p.category !== activeCategory) return false;
-                if (filters.size && p.size !== filters.size) return false;
-                if (filters.color && p.color !== filters.color) return false;
+                if (filters.brand && String(p.brand || '').toLowerCase().indexOf(filters.brand) === -1) return false;
+                if (filters.color && String(p.color || '').toLowerCase().indexOf(filters.color) === -1) return false;
                 if (filters.minPrice != null && p.asking_price < filters.minPrice) return false;
                 if (filters.maxPrice != null && p.asking_price > filters.maxPrice) return false;
                 return true;
@@ -221,31 +221,9 @@
         document.getElementById('filterClose').addEventListener('click', closeFilters);
         filterOverlay.addEventListener('click', closeFilters);
         
-        function populateSelect(elementId, values, groupId) {
-            const select = document.getElementById(elementId);
-            if (!select) return;
-            if (!values.length) {
-                const group = document.getElementById(groupId);
-                if (group) group.style.display = 'none';
-                return;
-            }
-            values.forEach(v => {
-                const option = document.createElement('option');
-                option.value = v;
-                option.textContent = v;
-                select.appendChild(option);
-            });
-        }
-        
-        const sizes = [...new Set(allProducts.map(p => p.size).filter(Boolean))].sort();
-        const colors = [...new Set(allProducts.map(p => p.color).filter(Boolean))].sort();
-        
-        populateSelect('filterSize', sizes, 'groupSize');
-        populateSelect('filterColor', colors, 'groupColor');
-        
         document.getElementById('filterApply').addEventListener('click', () => {
-            filters.size = document.getElementById('filterSize').value || null;
-            filters.color = document.getElementById('filterColor').value || null;
+            filters.brand = document.getElementById('filterBrand').value.trim() || null;
+            filters.color = document.getElementById('filterColor').value.trim() || null;
             filters.minPrice = document.getElementById('priceMin').value ? Number(document.getElementById('priceMin').value) : null;
             filters.maxPrice = document.getElementById('priceMax').value ? Number(document.getElementById('priceMax').value) : null;
             applyFilters();
@@ -253,11 +231,11 @@
         });
         
         document.getElementById('filterClear').addEventListener('click', () => {
-            document.getElementById('filterSize').value = '';
+            document.getElementById('filterBrand').value = '';
             document.getElementById('filterColor').value = '';
             document.getElementById('priceMin').value = '';
             document.getElementById('priceMax').value = '';
-            filters.size = null;
+            filters.brand = null;
             filters.color = null;
             filters.minPrice = null;
             filters.maxPrice = null;
