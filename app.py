@@ -650,12 +650,20 @@ def is_admin_user():
     user = None
     if firestore_db.is_firestore_available():
         user = firestore_db.fs_get_user(session['user_id'])
-    if not user:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        user = cursor.execute('SELECT * FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
-        conn.close()
-    admin_email = os.environ.get('ADMIN_EMAIL')
+        if user:
+            try:
+                if user_has_admin_privilege(user):
+                    return True
+            except Exception:
+                pass
+            admin_email = os.environ.get('ADMIN_EMAIL')
+            if admin_email and user.get('email') and user.get('email').lower() == admin_email.lower():
+                return True
+            return False
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    user = cursor.execute('SELECT * FROM users WHERE user_id = ?', (session['user_id'],)).fetchone()
+    conn.close()
     if not user:
         return False
     try:
@@ -663,6 +671,7 @@ def is_admin_user():
             return True
     except Exception:
         pass
+    admin_email = os.environ.get('ADMIN_EMAIL')
     if admin_email and user.get('email') and user.get('email').lower() == admin_email.lower():
         return True
     return False
@@ -974,6 +983,14 @@ def delete_listing(product_id):
         firestore_db.fs_delete_product(product_id)
         if was_sold:
             firestore_db.fs_increment_stat('sold_items', -1)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if was_sold:
+            cursor.execute('UPDATE stats SET sold_items = sold_items - 1 WHERE id = 1')
+        cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
+        conn.commit()
+        conn.close()
 
     # attempt to remove local image files if present
     try:
@@ -1000,14 +1017,6 @@ def delete_listing(product_id):
     except Exception:
         pass
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if was_sold:
-        cursor.execute('UPDATE stats SET sold_items = sold_items - 1 WHERE id = 1')
-    cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
-    conn.commit()
-    conn.close()
-    
     flash('Listing deleted successfully.')
     return redirect(url_for('seller_listings'))
 
@@ -1294,10 +1303,10 @@ def admin_dashboard():
             listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
             listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
 
-            stats['total_users'] = cursor.execute('SELECT COUNT(*) FROM users').fetchone()[0]
-            stats['active_listings'] = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'available'").fetchone()[0]
-            stats['sold_items'] = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'sold'").fetchone()[0]
-            stats['questions_asked'] = cursor.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
+            stats['total_users'] = cursor.execute('SELECT COUNT(*) AS total_users FROM users').fetchone()['total_users']
+            stats['active_listings'] = cursor.execute("SELECT COUNT(*) AS active_listings FROM Products WHERE status = 'available'").fetchone()['active_listings']
+            stats['sold_items'] = cursor.execute("SELECT COUNT(*) AS sold_items FROM Products WHERE status = 'sold'").fetchone()['sold_items']
+            stats['questions_asked'] = cursor.execute('SELECT COUNT(*) AS questions_asked FROM questions').fetchone()['questions_asked']
             backend = 'sqlite'
         except Exception as e:
             logging.error(f"Admin dashboard SQLite error: {e}")
@@ -1355,17 +1364,17 @@ def admin_delete_user(user_id):
             firestore_db.fs_increment_stat('total_users', -1)
         except Exception:
             pass
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM answers WHERE user_id = ?', (user_id,))
-    cursor.execute('DELETE FROM questions WHERE user_id = ?', (user_id,))
-    cursor.execute('DELETE FROM Products WHERE seller_id = ?', (user_id,))
-    cursor.execute('DELETE FROM orders WHERE buyer_id = ? OR seller_id = ?', (user_id, user_id))
-    cursor.execute('UPDATE stats SET total_users = total_users - 1 WHERE id = 1')
-    cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
-    conn.commit()
-    conn.close()
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM answers WHERE user_id = ?', (user_id,))
+        cursor.execute('DELETE FROM questions WHERE user_id = ?', (user_id,))
+        cursor.execute('DELETE FROM Products WHERE seller_id = ?', (user_id,))
+        cursor.execute('DELETE FROM orders WHERE buyer_id = ? OR seller_id = ?', (user_id, user_id))
+        cursor.execute('UPDATE stats SET total_users = total_users - 1 WHERE id = 1')
+        cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
+        conn.commit()
+        conn.close()
 
     flash('User deleted successfully.')
     return redirect(url_for('admin_dashboard', section='users'))
@@ -1384,6 +1393,15 @@ def admin_delete_listing(product_id):
         firestore_db.fs_delete_product(product_id)
         if was_sold:
             firestore_db.fs_increment_stat('sold_items', -1)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if was_sold:
+            cursor.execute('UPDATE stats SET sold_items = sold_items - 1 WHERE id = 1')
+        cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
+        conn.commit()
+        conn.close()
+
     try:
         images = []
         if product.get('images'):
@@ -1406,13 +1424,7 @@ def admin_delete_listing(product_id):
                     pass
     except Exception:
         pass
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    if was_sold:
-        cursor.execute('UPDATE stats SET sold_items = sold_items - 1 WHERE id = 1')
-    cursor.execute('DELETE FROM Products WHERE id = ?', (product_id,))
-    conn.commit()
-    conn.close()
+
     flash('Listing removed.')
     return redirect(url_for('admin_dashboard', section='listings'))
 
