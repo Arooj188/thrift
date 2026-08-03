@@ -1205,6 +1205,8 @@ def admin_dashboard():
     listing_status = request.args.get('listing_status', 'all')
     if section == 'sold':
         listing_status = 'sold'
+        section = 'listings'
+
     stats = {
         'total_users': 0,
         'active_listings': 0,
@@ -1212,57 +1214,67 @@ def admin_dashboard():
         'questions_asked': 0,
     }
 
+    listings = []
+    users = []
+    listing_counts = {}
+    backend = 'none'
+
     if firestore_db.is_firestore_available():
-        db = firestore_db.get_firestore_db()
-        listings = []
-        users = []
-        listing_counts = {}
         try:
-            listings_ref = db.collection('Products').order_by('created_at', direction='DESCENDING')
-            listings_query = listings_ref
-            if listing_status == 'available':
-                listings_query = listings_ref.where('status', '==', 'available')
-            elif listing_status == 'sold':
-                listings_query = listings_ref.where('status', '==', 'sold')
-            for doc in listings_query.stream():
-                p = doc.to_dict()
-                p['id'] = int(doc.id) if doc.id.isdigit() else doc.id
-                if listing_search:
-                    title = (p.get('title') or '').lower()
-                    if listing_search.lower() not in title:
-                        continue
-                listings.append(p)
+            db = firestore_db.get_firestore_db()
+            if db is not None:
+                listings_ref = db.collection('Products').order_by('created_at', direction='DESCENDING')
+                listings_query = listings_ref
+                if listing_status == 'available':
+                    listings_query = listings_ref.where('status', '==', 'available')
+                elif listing_status == 'sold':
+                    listings_query = listings_ref.where('status', '==', 'sold')
+                for doc in listings_query.stream():
+                    p = doc.to_dict()
+                    p['id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                    if listing_search:
+                        title = (p.get('title') or '').lower()
+                        if listing_search.lower() not in title:
+                            continue
+                    listings.append(p)
 
-            users_query = db.collection('users').order_by('join_date', direction='DESCENDING')
-            for doc in users_query.stream():
-                u = doc.to_dict()
-                u['user_id'] = int(doc.id) if doc.id.isdigit() else doc.id
-                if user_search:
-                    name = (u.get('name') or '').lower()
-                    email = (u.get('email') or '').lower()
-                    if user_search.lower() not in name and user_search.lower() not in email:
-                        continue
-                users.append(u)
+                users_query = db.collection('users').order_by('join_date', direction='DESCENDING')
+                for doc in users_query.stream():
+                    u = doc.to_dict()
+                    u['user_id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                    if user_search:
+                        name = (u.get('name') or '').lower()
+                        email = (u.get('email') or '').lower()
+                        if user_search.lower() not in name and user_search.lower() not in email:
+                            continue
+                    users.append(u)
 
-            seller_counts = {}
-            for p in listings:
-                sid = p.get('seller_id')
-                if sid:
-                    seller_counts[sid] = seller_counts.get(sid, 0) + 1
-            listing_counts = seller_counts
+                seller_counts = {}
+                for p in listings:
+                    sid = p.get('seller_id')
+                    if sid:
+                        seller_counts[sid] = seller_counts.get(sid, 0) + 1
+                listing_counts = seller_counts
 
-            stats['total_users'] = db.collection('users').count().get().count
-            stats['active_listings'] = db.collection('Products').where('status', '==', 'available').count().get().count
-            stats['sold_items'] = db.collection('Products').where('status', '==', 'sold').count().get().count
-            stats['questions_asked'] = db.collection('questions').count().get().count
+                users_count_snapshot = db.collection('users').count().get()
+                stats['total_users'] = users_count_snapshot[0][0] if users_count_snapshot else 0
+                active_snapshot = db.collection('Products').where('status', '==', 'available').count().get()
+                stats['active_listings'] = active_snapshot[0][0] if active_snapshot else 0
+                sold_snapshot = db.collection('Products').where('status', '==', 'sold').count().get()
+                stats['sold_items'] = sold_snapshot[0][0] if sold_snapshot else 0
+                questions_snapshot = db.collection('questions').count().get()
+                stats['questions_asked'] = questions_snapshot[0][0] if questions_snapshot else 0
+
+                backend = 'firestore'
         except Exception as e:
             logging.error(f"Admin dashboard Firestore error: {e}")
-            flash('Error loading dashboard data from Firestore.', 'error')
-    else:
+            backend = 'error'
+
+    if backend == 'error' or not firestore_db.is_firestore_available():
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
-            if section == 'users' and user_search:
+            if user_search:
                 users = [dict(row) for row in cursor.execute(
                     'SELECT * FROM users WHERE lower(name) LIKE ? OR lower(email) LIKE ? ORDER BY join_date DESC',
                     (f'%{user_search.lower()}%', f'%{user_search.lower()}%')
@@ -1270,15 +1282,14 @@ def admin_dashboard():
             else:
                 users = [dict(row) for row in cursor.execute('SELECT * FROM users ORDER BY join_date DESC').fetchall()]
 
-            if section == 'listings':
-                if listing_status == 'available':
-                    listings = [dict(row) for row in cursor.execute("SELECT * FROM Products WHERE status = 'available' ORDER BY created_at DESC").fetchall()]
-                elif listing_status == 'sold':
-                    listings = [dict(row) for row in cursor.execute("SELECT * FROM Products WHERE status = 'sold' ORDER BY created_at DESC").fetchall()]
-                else:
-                    listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
-                if listing_search:
-                    listings = [l for l in listings if listing_search.lower() in (l.get('title') or '').lower()]
+            if listing_status == 'available':
+                listings = [dict(row) for row in cursor.execute("SELECT * FROM Products WHERE status = 'available' ORDER BY created_at DESC").fetchall()]
+            elif listing_status == 'sold':
+                listings = [dict(row) for row in cursor.execute("SELECT * FROM Products WHERE status = 'sold' ORDER BY created_at DESC").fetchall()]
+            else:
+                listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
+            if listing_search:
+                listings = [l for l in listings if listing_search.lower() in (l.get('title') or '').lower()]
 
             listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
             listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
@@ -1287,6 +1298,7 @@ def admin_dashboard():
             stats['active_listings'] = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'available'").fetchone()[0]
             stats['sold_items'] = cursor.execute("SELECT COUNT(*) FROM Products WHERE status = 'sold'").fetchone()[0]
             stats['questions_asked'] = cursor.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
+            backend = 'sqlite'
         except Exception as e:
             logging.error(f"Admin dashboard SQLite error: {e}")
             flash('Error loading dashboard data.', 'error')
@@ -1610,7 +1622,7 @@ def login():
             user = None
             if firestore_db.is_firestore_available():
                 user = firestore_db.fs_get_user_by_email(email_value)
-            if not user:
+            else:
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute('SELECT * FROM users WHERE lower(email) = lower(?)', (email_value,))

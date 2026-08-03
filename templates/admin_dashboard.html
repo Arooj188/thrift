@@ -144,7 +144,7 @@
     <div class="admin-section active" id="section-listings" style="{% if section not in ['listings', 'sold'] %}display: none;{% endif %}">
       <h1 style="font-size: 24px; font-weight: 800; margin: 0 0 20px 0;">Listings</h1>
       <form method="GET" action="/admin" style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-        <input type="hidden" name="section" value="listings">
+        <input type="hidden" name="section" value="{{ section }}">
         <input type="text" name="listing_search" value="{{ listing_search or '' }}" placeholder="Search by title..." style="flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #dcd7ce; border-radius: 8px; font-family: inherit; font-size: 14px;">
         <select name="listing_status" style="padding: 10px 14px; border: 1px solid #dcd7ce; border-radius: 8px; font-family: inherit; font-size: 14px;">
           <option value="all" {% if listing_status == 'all' %}selected{% endif %}>All Statuses</option>
