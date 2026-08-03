@@ -951,8 +951,17 @@ def mark_sold(product_id):
         flash('Please log in to manage your listings.')
         return redirect(url_for('login'))
 
-    product = get_product_by_id(product_id)
-    if not product or product.get('seller_id') != session['user_id']:
+    if firestore_db.is_firestore_available():
+        product = firestore_db.fs_get_product(product_id)
+    else:
+        product = get_product_by_id(product_id)
+
+    if not product:
+        flash('Unable to update the listing.')
+        return redirect(url_for('seller_listings'))
+
+    owner_id = product.get('seller_id') or product.get('owner_id')
+    if str(owner_id) != str(session['user_id']):
         flash('Unable to update the listing.')
         return redirect(url_for('seller_listings'))
 
@@ -984,8 +993,17 @@ def delete_listing(product_id):
         flash('Please log in to delete your listing.')
         return redirect(url_for('login'))
 
-    product = get_product_by_id(product_id)
-    if not product or product.get('seller_id') != session['user_id']:
+    if firestore_db.is_firestore_available():
+        product = firestore_db.fs_get_product(product_id)
+    else:
+        product = get_product_by_id(product_id)
+
+    if not product:
+        flash('Unable to delete the listing.')
+        return redirect(url_for('seller_listings'))
+
+    owner_id = product.get('seller_id') or product.get('owner_id')
+    if str(owner_id) != str(session['user_id']):
         flash('Unable to delete the listing.')
         return redirect(url_for('seller_listings'))
 
@@ -1049,7 +1067,7 @@ def edit_listing(product_id):
         return redirect(url_for('seller_listings'))
 
     owner_id = product.get('seller_id') or product.get('owner_id')
-    if owner_id != session['user_id']:
+    if str(owner_id) != str(session['user_id']):
         flash('Listing not found or you do not have permission to edit it.')
         return redirect(url_for('seller_listings'))
     if product.get('status') == 'sold':
@@ -1246,6 +1264,7 @@ def admin_dashboard():
     listings = []
     users = []
     listing_counts = {}
+    questions = []
     backend = 'none'
 
     if firestore_db.is_firestore_available():
@@ -1261,6 +1280,8 @@ def admin_dashboard():
                 for doc in listings_query.stream():
                     p = doc.to_dict()
                     p['id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                    if p.get('seller_id') is not None:
+                        p['seller_id'] = str(p['seller_id'])
                     if listing_search:
                         title = (p.get('title') or '').lower()
                         if listing_search.lower() not in title:
@@ -1288,14 +1309,28 @@ def admin_dashboard():
                         seller_counts[sid] = seller_counts.get(sid, 0) + 1
                 listing_counts = seller_counts
 
-                users_count_snapshot = db.collection('users').count().get()
-                stats['total_users'] = users_count_snapshot[0].value if users_count_snapshot else 0
-                active_snapshot = db.collection('Products').where('status', '==', 'available').count().get()
-                stats['active_listings'] = active_snapshot[0].value if active_snapshot else 0
-                sold_snapshot = db.collection('Products').where('status', '==', 'sold').count().get()
-                stats['sold_items'] = sold_snapshot[0].value if sold_snapshot else 0
-                questions_snapshot = db.collection('questions').count().get()
-                stats['questions_asked'] = questions_snapshot[0].value if questions_snapshot else 0
+                stats['total_users'] = len(users)
+                stats['active_listings'] = sum(1 for p in listings if p.get('status') == 'available')
+                stats['sold_items'] = sum(1 for p in listings if p.get('status') == 'sold')
+                questions_asked = 0
+                for _ in db.collection('questions').stream():
+                    questions_asked += 1
+                stats['questions_asked'] = questions_asked
+
+                if section == 'questions':
+                    questions = []
+                    for doc in db.collection('questions').stream():
+                        q = doc.to_dict()
+                        q['question_id'] = int(doc.id) if doc.id.isdigit() else doc.id
+                        answers = []
+                        for a_doc in db.collection('answers').where('question_id', '==', q['question_id']).stream():
+                            a = a_doc.to_dict()
+                            a['answer_id'] = int(a_doc.id) if a_doc.id.isdigit() else a_doc.id
+                            answers.append(a)
+                        q['answers'] = answers
+                        questions.append(q)
+                else:
+                    questions = []
 
                 backend = 'firestore'
         except Exception as e:
@@ -1330,6 +1365,13 @@ def admin_dashboard():
             stats['active_listings'] = cursor.execute("SELECT COUNT(*) AS active_listings FROM Products WHERE status = 'available'").fetchone()['active_listings']
             stats['sold_items'] = cursor.execute("SELECT COUNT(*) AS sold_items FROM Products WHERE status = 'sold'").fetchone()['sold_items']
             stats['questions_asked'] = cursor.execute('SELECT COUNT(*) AS questions_asked FROM questions').fetchone()['questions_asked']
+
+            if section == 'questions':
+                questions_rows = cursor.execute('SELECT * FROM questions ORDER BY created_at DESC').fetchall()
+                questions = [dict(row) for row in questions_rows]
+                for q in questions:
+                    answers_rows = cursor.execute('SELECT * FROM answers WHERE question_id = ? ORDER BY created_at ASC', (q['question_id'],)).fetchall()
+                    q['answers'] = [dict(row) for row in answers_rows]
             backend = 'sqlite'
         except Exception as e:
             logging.error(f"Admin dashboard SQLite error: {e}")
@@ -1348,6 +1390,7 @@ def admin_dashboard():
         listing_search=listing_search,
         listing_status=listing_status,
         viewing_sold=viewing_sold,
+        questions=questions or [],
     )
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
@@ -1454,6 +1497,41 @@ def admin_delete_listing(product_id):
     return redirect(url_for('admin_dashboard', section='listings'))
 
 
+@app.route('/admin/question/<question_id>/delete', methods=['POST'])
+def admin_delete_question(question_id):
+    guard = require_admin()
+    if guard is not None:
+        return guard
+    if firestore_db.is_firestore_available():
+        firestore_db.fs_delete_question(question_id)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM answers WHERE question_id = ?', (question_id,))
+        cursor.execute('DELETE FROM questions WHERE question_id = ?', (question_id,))
+        conn.commit()
+        conn.close()
+    flash('Question deleted.')
+    return redirect(url_for('admin_dashboard', section='questions'))
+
+
+@app.route('/admin/question/<question_id>/answer/<answer_id>/delete', methods=['POST'])
+def admin_delete_answer(question_id, answer_id):
+    guard = require_admin()
+    if guard is not None:
+        return guard
+    if firestore_db.is_firestore_available():
+        firestore_db.fs_delete_answer(answer_id)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM answers WHERE answer_id = ?', (answer_id,))
+        conn.commit()
+        conn.close()
+    flash('Answer deleted.')
+    return redirect(url_for('admin_dashboard', section='questions'))
+
+
 @app.route('/messages')
 def messages_page():
     if 'user_id' not in session:
@@ -1521,8 +1599,17 @@ def post_answer(product_id, question_id):
     if 'user_id' not in session:
         flash('Please log in to answer questions.')
         return redirect(url_for('login'))
-    product = get_product_by_id(product_id)
-    if not product or product.get('seller_id') != session['user_id']:
+    if firestore_db.is_firestore_available():
+        product = firestore_db.fs_get_product(product_id)
+    else:
+        product = get_product_by_id(product_id)
+
+    if not product:
+        flash('Only the seller can answer questions on this product.')
+        return redirect(url_for('product_details', product_id=product_id))
+
+    owner_id = product.get('seller_id') or product.get('owner_id')
+    if str(owner_id) != str(session['user_id']):
         flash('Only the seller can answer questions on this product.')
         return redirect(url_for('product_details', product_id=product_id))
     content = sanitize_input(request.form.get('answer_content', ''))

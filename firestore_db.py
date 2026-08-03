@@ -118,6 +118,8 @@ def fs_get_product(pid):
         if doc.exists:
             data = doc.to_dict()
             data['id'] = int(doc.id) if doc.id.isdigit() else doc.id
+            if data.get('seller_id') is not None:
+                data['seller_id'] = str(data['seller_id'])
             return data
     except Exception as e:
         logging.error(f"Firestore get_product error: {e}")
@@ -128,11 +130,13 @@ def fs_get_products_by_seller(seller_id):
     if not is_firestore_available():
         return []
     try:
-        docs = _db.collection('Products').where('seller_id', '==', seller_id).stream()
+        docs = _db.collection('Products').where('seller_id', '==', str(seller_id)).stream()
         products = []
         for doc in docs:
             data = doc.to_dict()
             data['id'] = int(doc.id) if doc.id.isdigit() else doc.id
+            if data.get('seller_id') is not None:
+                data['seller_id'] = str(data['seller_id'])
             products.append(data)
         return products
     except Exception as e:
@@ -149,6 +153,8 @@ def fs_get_all_products(category=None):
         for doc in docs:
             data = doc.to_dict()
             data['id'] = int(doc.id) if doc.id.isdigit() else doc.id
+            if data.get('seller_id') is not None:
+                data['seller_id'] = str(data['seller_id'])
             if category and data.get('category') != category:
                 continue
             products.append(data)
@@ -163,6 +169,9 @@ def fs_create_product(data):
         return None
     try:
         pid = data.get('id')
+        if data.get('seller_id') is not None:
+            data = dict(data)
+            data['seller_id'] = str(data['seller_id'])
         if pid:
             _db.collection('Products').document(str(pid)).set(data)
         else:
@@ -178,7 +187,10 @@ def fs_update_product(pid, data):
     if not is_firestore_available():
         return False
     try:
-        _db.collection('Products').document(str(pid)).set(data, merge=True)
+        update_data = dict(data)
+        if update_data.get('seller_id') is not None:
+            update_data['seller_id'] = str(update_data['seller_id'])
+        _db.collection('Products').document(str(pid)).set(update_data, merge=True)
         return True
     except Exception as e:
         logging.error(f"Firestore update_product error: {e}")
@@ -237,6 +249,28 @@ def fs_delete_questions_by_product(product_id):
         return True
     except Exception as e:
         logging.error(f"Firestore delete_questions_by_product error: {e}")
+        return False
+
+
+def fs_delete_question(question_id):
+    if not is_firestore_available():
+        return False
+    try:
+        _db.collection('questions').document(str(question_id)).delete()
+        return True
+    except Exception as e:
+        logging.error(f"Firestore delete_question error: {e}")
+        return False
+
+
+def fs_delete_answer(answer_id):
+    if not is_firestore_available():
+        return False
+    try:
+        _db.collection('answers').document(str(answer_id)).delete()
+        return True
+    except Exception as e:
+        logging.error(f"Firestore delete_answer error: {e}")
         return False
 
 

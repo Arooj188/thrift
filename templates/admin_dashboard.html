@@ -117,6 +117,7 @@
       <a href="/admin?section=listings" class="{% if section == 'listings' %}active{% endif %}">Listings</a>
       <a href="/admin?section=sold" class="{% if section == 'sold' %}active{% endif %}">Sold Items</a>
       <a href="/admin?section=users" class="{% if section == 'users' %}active{% endif %}">Users</a>
+      <a href="/admin?section=questions" class="{% if section == 'questions' %}active{% endif %}">Questions</a>
     </nav>
   </aside>
 
@@ -250,6 +251,58 @@
                       <button type="submit" class="btn-danger">Delete</button>
                     </form>
                   {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="admin-section" id="section-questions" style="{% if section != 'questions' %}display: none;{% endif %}">
+      <h1 style="font-size: 24px; font-weight: 800; margin: 0 0 20px 0;">Questions & Answers</h1>
+      {% if not questions %}
+        <p style="color: #767676;">No questions found.</p>
+      {% else %}
+        <div style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Question ID</th>
+                <th>Product</th>
+                <th>User</th>
+                <th>Question</th>
+                <th>Answers</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for q in questions %}
+              <tr>
+                <td>{{ q.question_id or q.id }}</td>
+                <td>{{ q.product_id }}</td>
+                <td>{{ q.user_id }}</td>
+                <td>{{ q.content }}</td>
+                <td>
+                  {% if q.answers %}
+                    {% for a in q.answers %}
+                      <div style="margin-bottom: 8px; padding: 8px; background: #fbf9f6; border-radius: 8px;">
+                        <div style="font-size: 12px; color: #767676;">Answer by {{ a.user_id }}</div>
+                        <div>{{ a.content }}</div>
+                        <form action="/admin/question/{{ q.question_id or q.id }}/answer/{{ a.answer_id or a.id }}/delete" method="POST" onsubmit="return confirm('Delete this answer?');" style="margin-top: 6px;">
+                          <button type="submit" class="btn-danger" style="font-size: 11px; padding: 4px 10px;">Delete Answer</button>
+                        </form>
+                      </div>
+                    {% endfor %}
+                  {% else %}
+                    <span style="color: #767676;">No answers</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <form action="/admin/question/{{ q.question_id or q.id }}/delete" method="POST" onsubmit="return confirm('Delete this question and all its answers?');">
+                    <button type="submit" class="btn-danger">Delete Question</button>
+                  </form>
                 </td>
               </tr>
               {% endfor %}
