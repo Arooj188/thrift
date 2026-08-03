@@ -154,7 +154,11 @@
         <button type="submit" class="btn-submit" style="padding: 10px 20px;">Filter</button>
       </form>
       {% if not listings %}
-        <p style="color: #767676;">No listings found.</p>
+        {% if viewing_sold %}
+          <p style="color: #767676;">No sold items found.</p>
+        {% else %}
+          <p style="color: #767676;">No listings found.</p>
+        {% endif %}
       {% else %}
         <div style="overflow-x: auto;">
           <table class="data-table">

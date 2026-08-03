@@ -18,6 +18,7 @@ from urllib.parse import quote
 from ai_service import analyze_item
 import firestore_db
 from email_service import send_email, send_password_reset_email
+from PIL import Image
 
 RESET_TOKEN_EXPIRY_MINUTES = 60
 
@@ -478,7 +479,18 @@ def save_uploaded_images(files):
                 unique_name = f"{timestamp}_{filename}"
                 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
                 save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
-                image_file.save(save_path)
+
+                try:
+                    image_file.seek(0)
+                    img = Image.open(image_file)
+                    img.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
+                    if img.mode in ('RGBA', 'P'):
+                        img = img.convert('RGB')
+                    img.save(save_path, 'JPEG', quality=85, optimize=True)
+                except Exception:
+                    image_file.seek(0)
+                    image_file.save(save_path)
+
                 saved_paths.append(f"uploads/{unique_name}")
             except Exception as e:
                 logging.error(f"Image upload error: {e}")
@@ -1313,6 +1325,7 @@ def admin_dashboard():
             flash('Error loading dashboard data.', 'error')
         conn.close()
 
+    viewing_sold = section == 'sold' or listing_status == 'sold'
     return render_template('admin_dashboard.html',
         section=section,
         listings=listings,
@@ -1323,6 +1336,7 @@ def admin_dashboard():
         user_search=user_search,
         listing_search=listing_search,
         listing_status=listing_status,
+        viewing_sold=viewing_sold,
     )
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
