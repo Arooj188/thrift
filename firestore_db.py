@@ -138,6 +138,7 @@ def fs_get_products_by_seller(seller_id):
             if data.get('seller_id') is not None:
                 data['seller_id'] = str(data['seller_id'])
             products.append(data)
+        products.sort(key=lambda x: (0 if x.get('status') == 'available' else 1 if x.get('status') == 'sold' else 2, str(x.get('created_at') or '')))
         return products
     except Exception as e:
         logging.error(f"Firestore get_products_by_seller error: {e}")
@@ -160,6 +161,7 @@ def fs_get_all_products(category=None, include_sold=False):
             if not include_sold and data.get('status') == 'sold':
                 continue
             products.append(data)
+        products.sort(key=lambda x: (0 if x.get('status') == 'available' else 1 if x.get('status') == 'sold' else 2, str(x.get('created_at') or '')))
         return products
     except Exception as e:
         logging.error(f"Firestore get_all_products error: {e}")

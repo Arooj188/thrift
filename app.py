@@ -517,9 +517,9 @@ def get_products_from_firestore(category=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     if category:
-        cursor.execute("SELECT * FROM Products WHERE category = ? ORDER BY created_at DESC", (category,))
+        cursor.execute("SELECT * FROM Products WHERE category = ? ORDER BY CASE status WHEN 'available' THEN 0 WHEN 'sold' THEN 1 ELSE 2 END, created_at DESC", (category,))
     else:
-        cursor.execute('SELECT * FROM Products ORDER BY created_at DESC')
+        cursor.execute('SELECT * FROM Products ORDER BY CASE status WHEN \'available\' THEN 0 WHEN \'sold\' THEN 1 ELSE 2 END, created_at DESC')
     products = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return products
@@ -772,35 +772,34 @@ def product_details(product_id):
     gmail_url = ''
     mailto_url = ''
 
-    if not is_sold:
-        seller_id = product.get('seller_id')
-        if seller_id:
-            seller = firestore_db.fs_get_user(seller_id)
-            if seller:
-                seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
-                seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
-                seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
-            else:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                seller_row = cursor.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
-                conn.close()
-                if seller_row:
-                    seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
-                    seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
-                    seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
+    seller_id = product.get('seller_id')
+    if seller_id:
+        seller = firestore_db.fs_get_user(seller_id)
+        if seller:
+            seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
+            seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
+            seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
+        else:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            seller_row = cursor.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
+            conn.close()
+            if seller_row:
+                seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
+                seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
+                seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
 
-        listing_contact_method = product.get('buyer_contact_method') or 'whatsapp'
+    listing_contact_method = product.get('buyer_contact_method') or 'whatsapp'
 
-        if product.get('title'):
-            if seller_phone and listing_contact_method == 'whatsapp':
-                text = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
-                whatsapp_url = f"https://wa.me/{seller_phone}?text={quote(text)}"
-            elif seller_email and listing_contact_method == 'email':
-                subject = f"Interest in {product['title']}"
-                body = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
-                gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(seller_email)}&su={quote(subject)}&body={quote(body)}"
-                mailto_url = f"mailto:{seller_email}?subject={quote(subject)}&body={quote(body)}"
+    if product.get('title') and not is_sold:
+        if seller_phone and listing_contact_method == 'whatsapp':
+            text = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
+            whatsapp_url = f"https://wa.me/{seller_phone}?text={quote(text)}"
+        elif seller_email and listing_contact_method == 'email':
+            subject = f"Interest in {product['title']}"
+            body = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
+            gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(seller_email)}&su={quote(subject)}&body={quote(body)}"
+            mailto_url = f"mailto:{seller_email}?subject={quote(subject)}&body={quote(body)}"
 
     return render_template('product_details.html', product=product, image_list=image_list, questions=questions, seller_phone=seller_phone, seller_email=seller_email, seller_contact_preference=listing_contact_method, whatsapp_url=whatsapp_url, gmail_url=gmail_url, mailto_url=mailto_url, is_sold=is_sold)
 
@@ -829,9 +828,10 @@ def sell():
         else:
             seller_address = seller_city
         asking_price = float(request.form['asking_price'])
-        buyer_contact_method = request.form.get('buyer_contact_method', 'whatsapp')
+        buyer_contact_method = request.form.get('buyer_contact_method', '').strip().lower()
         if buyer_contact_method not in ('whatsapp', 'email'):
-            buyer_contact_method = 'whatsapp'
+            flash('Please select a preferred contact method.')
+            return redirect(url_for('sell'))
         image_files = request.files.getlist('images') or []
         if not image_files:
             self_image = request.files.get('image')
@@ -906,7 +906,7 @@ def seller_listings():
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
-        listings = cursor.execute('SELECT * FROM Products WHERE seller_id = ?', (session['user_id'],)).fetchall()
+        listings = cursor.execute('SELECT * FROM Products WHERE seller_id = ? ORDER BY CASE status WHEN \'available\' THEN 0 WHEN \'sold\' THEN 1 ELSE 2 END, created_at DESC', (session['user_id'],)).fetchall()
         conn.close()
     total_sold = sum(1 for listing in listings if listing.get('status') == 'sold')
     stats = get_marketplace_stats()
@@ -1110,9 +1110,10 @@ def edit_listing(product_id):
         else:
             seller_address = seller_city
         asking_price = float(request.form['asking_price'])
-        buyer_contact_method = request.form.get('buyer_contact_method', 'whatsapp')
+        buyer_contact_method = request.form.get('buyer_contact_method', '').strip().lower()
         if buyer_contact_method not in ('whatsapp', 'email'):
-            buyer_contact_method = 'whatsapp'
+            flash('Please select a preferred contact method.')
+            return redirect(url_for('edit_listing', product_id=product_id))
         image_files = request.files.getlist('images')
 
         image_paths = save_uploaded_images(image_files)
@@ -1299,7 +1300,8 @@ def admin_dashboard():
                             continue
                     users.append(u)
 
-                listings.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
+                listings.sort(key=lambda x: (0 if x.get('status') == 'available' else 1 if x.get('status') == 'sold' else 2, str(x.get('created_at') or '')), reverse=False)
+                listings.reverse()
                 users.sort(key=lambda x: str(x.get('join_date') or ''), reverse=True)
 
                 seller_counts = {}
@@ -1355,7 +1357,7 @@ def admin_dashboard():
             elif listing_status == 'sold':
                 listings = [dict(row) for row in cursor.execute("SELECT * FROM Products WHERE status = 'sold' ORDER BY created_at DESC").fetchall()]
             else:
-                listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY created_at DESC').fetchall()]
+                listings = [dict(row) for row in cursor.execute('SELECT * FROM Products ORDER BY CASE status WHEN \'available\' THEN 0 WHEN \'sold\' THEN 1 ELSE 2 END, created_at DESC').fetchall()]
             if listing_search:
                 listings = [l for l in listings if listing_search.lower() in (l.get('title') or '').lower()]
 

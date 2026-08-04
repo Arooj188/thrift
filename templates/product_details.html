@@ -333,6 +333,28 @@
             <div style="background: #f2efea; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 30px; text-align: center;">
                 <p style="font-size: 14px; font-weight: 700; color: #1c1c1c; margin: 0;">This is your listing.</p>
             </div>
+            {% if seller_contact_preference == 'whatsapp' and whatsapp_url %}
+                <div style="margin-bottom: 30px;">
+                    <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: WhatsApp</p>
+                    <a href="{{ whatsapp_url | safe }}" target="_blank" rel="noopener" class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
+                </div>
+            {% elif seller_contact_preference == 'email' and gmail_url %}
+                <div style="margin-bottom: 30px;">
+                    <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
+                    <a href="{{ gmail_url | safe }}"
+                       onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
+                       class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
+                </div>
+            {% elif gmail_url %}
+                <div style="margin-bottom: 30px;">
+                    <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
+                    <a href="{{ gmail_url | safe }}"
+                       onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
+                       class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
+                </div>
+            {% else %}
+                <p style="font-size: 13px; color: #767676; text-align: center; margin-bottom: 30px;">The seller has not provided contact details for this listing.</p>
+            {% endif %}
         {% elif is_sold %}
             <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px; margin-bottom: 30px; text-align: center;">
                 <p style="font-size: 14px; font-weight: 700; color: #991b1b; margin: 0 0 4px 0;">This item has been sold.</p>

@@ -280,17 +280,17 @@
             <input type="number" name="asking_price" required value="{{ product.asking_price }}">
         </div>
 
-        <div class="edit-section-title">Buyer Contact Method</div>
+        <div class="edit-section-title">Preferred Contact Method</div>
 
         <div class="edit-form-group">
-            <label>Buyer Contact Method <span class="required-star">*</span></label>
+            <label>Preferred Contact Method <span class="required-star">*</span></label>
             <div style="display: flex; gap: 16px; margin-top: 8px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="radio" name="buyer_contact_method" value="whatsapp" {% if product.buyer_contact_method != 'email' %}checked{% endif %} style="width: 16px; height: 16px;">
+                    <input type="radio" name="buyer_contact_method" value="whatsapp" {% if product.buyer_contact_method == 'whatsapp' %}checked{% endif %} required style="width: 16px; height: 16px;">
                     <span>WhatsApp</span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="radio" name="buyer_contact_method" value="email" {% if product.buyer_contact_method == 'email' %}checked{% endif %} style="width: 16px; height: 16px;">
+                    <input type="radio" name="buyer_contact_method" value="email" {% if product.buyer_contact_method == 'email' %}checked{% endif %} required style="width: 16px; height: 16px;">
                     <span>Email</span>
                 </label>
             </div>
