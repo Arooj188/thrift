@@ -144,11 +144,11 @@ def fs_get_products_by_seller(seller_id):
         return []
 
 
-def fs_get_all_products(category=None):
+def fs_get_all_products(category=None, include_sold=False):
     if not is_firestore_available():
         return []
     try:
-        docs = _db.collection('Products').where('status', '==', 'available').stream()
+        docs = _db.collection('Products').stream()
         products = []
         for doc in docs:
             data = doc.to_dict()
@@ -156,6 +156,8 @@ def fs_get_all_products(category=None):
             if data.get('seller_id') is not None:
                 data['seller_id'] = str(data['seller_id'])
             if category and data.get('category') != category:
+                continue
+            if not include_sold and data.get('status') == 'sold':
                 continue
             products.append(data)
         return products

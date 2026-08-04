@@ -1,6 +1,31 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    .product-card--sold {
+        opacity: 0.65;
+        position: relative;
+    }
+    .product-card--sold .product-img,
+    .product-card--sold .product-placeholder {
+        filter: grayscale(40%);
+    }
+    .sold-ribbon {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: #991b1b;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 5px 10px;
+        border-radius: 6px;
+        z-index: 2;
+        pointer-events: none;
+    }
+</style>
 <div class="hero">
     <h1>thrift marketplace</h1>
     <p>
@@ -150,14 +175,21 @@
                 const imgHtml = hasProductImage(p.image_url, p.images)
                     ? `<img src="${buildImageUrl(p.image_url || p.images)}" alt="${escapeHtml(p.title)}" loading="lazy" class="product-img">`
                     : `<div class="product-placeholder">No image</div>`;
+                const isSold = String(p.status || '').toLowerCase() === 'sold';
+                const cardClass = isSold ? 'product-card product-card--sold' : 'product-card';
+                const ribbonHtml = isSold ? '<span class="sold-ribbon">Sold</span>' : '';
+                const linkHref = isSold ? '' : `/product/${p.id}`;
+                const tag = isSold ? 'div' : 'a';
+                const extraAttrs = isSold ? '' : `href="${linkHref}"`;
                 return `
-                    <a href="/product/${p.id}" class="product-card">
+                    <${tag} class="${cardClass}" ${extraAttrs}>
+                        ${ribbonHtml}
                         ${imgHtml}
                         <span class="size-tag">SIZE ${escapeHtml(p.size)}</span>
                         <div class="brand">${escapeHtml(p.brand)}</div>
                         <h3>${escapeHtml(p.title)}</h3>
                         <div class="price">${formatPrice(p.asking_price)}</div>
-                    </a>
+                    </${tag}>
                 `;
             }).join('');
         }

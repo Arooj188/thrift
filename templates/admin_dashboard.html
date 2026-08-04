@@ -242,7 +242,7 @@
                 <td>{{ u.city or '–' }}</td>
                 <td>{{ u.province or '–' }}</td>
                 <td style="color: #767676; font-size: 13px;">{{ u.join_date or '–' }}</td>
-                <td>{{ listing_counts.get(u.user_id, 0) }}</td>
+                <td>{{ listing_counts.get(u.user_id ~ '', 0) }}</td>
                 <td>
                   {% if u.user_id == current_admin_id %}
                     <span style="color: #767676; font-size: 12px; font-weight: 600;">Current Admin</span>

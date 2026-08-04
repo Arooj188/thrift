@@ -298,6 +298,16 @@
         <h1 style="font-size: 36px; font-weight: 800; margin: 10px 0 15px 0; color: #1c1c1c; line-height: 1.2;">{{ product.title }}</h1>
         <div style="font-size: 26px; font-weight: 800; color: #1c1c1c; margin-bottom: 30px;">Rs. {{ "{:,.2f}".format(product.asking_price) }}</div>
         
+        {% if is_sold %}
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin-bottom: 30px; display: flex; align-items: center; gap: 12px;">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #fee2e2; color: #991b1b; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px;">✓</div>
+            <div>
+                <p style="font-size: 14px; font-weight: 700; color: #991b1b; margin: 0 0 4px 0;">This item has been marked as Sold.</p>
+                <p style="font-size: 13px; color: #555555; margin: 0;">Please keep it visible for 3–5 days before deleting it so buyers know it is no longer available.</p>
+            </div>
+        </div>
+        {% endif %}
+        
         <div style="background: #f2efea; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
             <div style="border-bottom: 1px solid #dcd7ce; padding-bottom: 10px; margin-bottom: 10px;">
                 <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676;">Condition Summary</span>
@@ -319,40 +329,47 @@
             <div><span style="color: #767676;">Color:</span> <strong>{{ product.color }}</strong></div>
         </div>
 
-        {% if session.user_id != product.seller_id %}
-            {% if session.user_id %}
-                {% if seller_contact_preference == 'whatsapp' and whatsapp_url %}
-                    <div style="margin-bottom: 30px;">
-                        <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: WhatsApp</p>
-                        <a href="{{ whatsapp_url | safe }}" target="_blank" rel="noopener" class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
-                    </div>
-                {% elif seller_contact_preference == 'email' and gmail_url %}
-                    <div style="margin-bottom: 30px;">
-                        <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
-                        <a href="{{ gmail_url | safe }}"
-                           onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
-                           class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
-                    </div>
-                {% elif gmail_url %}
-                    <div style="margin-bottom: 30px;">
-                        <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
-                        <a href="{{ gmail_url | safe }}"
-                           onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
-                           class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
-                    </div>
-                {% else %}
-                    <p style="font-size: 13px; color: #767676; text-align: center; margin-bottom: 30px;">The seller has not provided contact details for this listing.</p>
-                {% endif %}
-            {% else %}
-                <div style="background: #f2efea; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 30px; text-align: center;">
-                    <h3 style="font-family: Georgia, serif; font-size: 15px; font-weight: 400; margin: 0 0 6px 0; color: #1c1c1c;">Contact Seller</h3>
-                    <p style="font-size: 12px; color: #555555; line-height: 1.5; margin: 0 0 12px 0; max-width: 340px; margin-left: auto; margin-right: auto;">Log in or sign up to contact the seller</p>
-                    <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
-                        <a href="/login" class="btn-submit" style="padding: 8px 16px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6; font-size: 11px; border-radius: 999px;">Log In</a>
-                        <a href="/signup" class="btn-submit" style="padding: 8px 16px; text-decoration: none; display: inline-block; background: #ffffff; color: #1c1c1c; border: 1px solid #f2efea; font-size: 11px; border-radius: 999px;">Create Account</a>
-                    </div>
+        {% if session.user_id == product.seller_id %}
+            <div style="background: #f2efea; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 30px; text-align: center;">
+                <p style="font-size: 14px; font-weight: 700; color: #1c1c1c; margin: 0;">This is your listing.</p>
+            </div>
+        {% elif is_sold %}
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px; margin-bottom: 30px; text-align: center;">
+                <p style="font-size: 14px; font-weight: 700; color: #991b1b; margin: 0 0 4px 0;">This item has been sold.</p>
+                <p style="font-size: 13px; color: #555555; margin: 0;">Contact with the seller is no longer available.</p>
+            </div>
+        {% elif session.user_id %}
+            {% if seller_contact_preference == 'whatsapp' and whatsapp_url %}
+                <div style="margin-bottom: 30px;">
+                    <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: WhatsApp</p>
+                    <a href="{{ whatsapp_url | safe }}" target="_blank" rel="noopener" class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
                 </div>
+            {% elif seller_contact_preference == 'email' and gmail_url %}
+                <div style="margin-bottom: 30px;">
+                    <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
+                    <a href="{{ gmail_url | safe }}"
+                       onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
+                       class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
+                </div>
+            {% elif gmail_url %}
+                <div style="margin-bottom: 30px;">
+                    <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
+                    <a href="{{ gmail_url | safe }}"
+                       onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
+                       class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
+                </div>
+            {% else %}
+                <p style="font-size: 13px; color: #767676; text-align: center; margin-bottom: 30px;">The seller has not provided contact details for this listing.</p>
             {% endif %}
+        {% else %}
+            <div style="background: #f2efea; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 30px; text-align: center;">
+                <h3 style="font-family: Georgia, serif; font-size: 15px; font-weight: 400; margin: 0 0 6px 0; color: #1c1c1c;">Contact Seller</h3>
+                <p style="font-size: 12px; color: #555555; line-height: 1.5; margin: 0 0 12px 0; max-width: 340px; margin-left: auto; margin-right: auto;">Log in or sign up to contact the seller</p>
+                <div style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
+                    <a href="/login" class="btn-submit" style="padding: 8px 16px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6; font-size: 11px; border-radius: 999px;">Log In</a>
+                    <a href="/signup" class="btn-submit" style="padding: 8px 16px; text-decoration: none; display: inline-block; background: #ffffff; color: #1c1c1c; border: 1px solid #f2efea; font-size: 11px; border-radius: 999px;">Create Account</a>
+                </div>
+            </div>
         {% endif %}
         
         <div class="qna-box">

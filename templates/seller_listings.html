@@ -115,8 +115,8 @@
         color: #991b1b;
     }
     .sold-notice {
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
         border-radius: 12px;
         padding: 16px;
         margin-top: 10px;
@@ -134,6 +134,8 @@
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
+        font-size: 16px;
+        font-weight: 700;
     }
     .sold-notice__icon svg {
         width: 18px;
@@ -145,7 +147,7 @@
     .sold-notice__title {
         font-size: 14px;
         font-weight: 700;
-        color: #1c1c1c;
+        color: #991b1b;
         margin: 0 0 4px 0;
     }
     .sold-notice__text {
@@ -253,14 +255,10 @@
                     </div>
                     {% if listing.status == 'sold' %}
                         <div class="sold-notice">
-                            <div class="sold-notice__icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                </svg>
-                            </div>
+                            <div class="sold-notice__icon">✓</div>
                             <div class="sold-notice__body">
-                                <p class="sold-notice__title">Sold listing</p>
-                                <p class="sold-notice__text">This item is sold. You can delete it after a few days to keep your dashboard organized.</p>
+                                <p class="sold-notice__title">This item has been marked as Sold.</p>
+                                <p class="sold-notice__text">Please keep it visible for 3–5 days before deleting it so buyers know it is no longer available.</p>
                             </div>
                         </div>
                         {% if listing.sold_date %}

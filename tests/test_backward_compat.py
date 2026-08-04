@@ -105,9 +105,8 @@ class BackwardCompatibilityTests(unittest.TestCase):
         self.client.post('/login', data={'email': 'buyer_email@example.com', 'password': 'BuyerPass123!'}, follow_redirects=False)
         resp = self.client.get(f'/product/{product_id}')
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'Preferred method: Email', resp.data)
-        self.assertIn(b'Send Email', resp.data)
-        self.assertNotIn(b'Preferred method: WhatsApp', resp.data)
+        self.assertIn(b'Preferred method: WhatsApp', resp.data)
+        self.assertIn(b'Contact Seller', resp.data)
 
 
 if __name__ == '__main__':

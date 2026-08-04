@@ -513,13 +513,13 @@ def get_product_by_id(product_id):
 
 def get_products_from_firestore(category=None):
     if firestore_db.is_firestore_available():
-        return firestore_db.fs_get_all_products(category=category)
+        return firestore_db.fs_get_all_products(category=category, include_sold=True)
     conn = get_db_connection()
     cursor = conn.cursor()
     if category:
-        cursor.execute("SELECT * FROM Products WHERE status = 'available' AND category = ?", (category,))
+        cursor.execute("SELECT * FROM Products WHERE category = ? ORDER BY created_at DESC", (category,))
     else:
-        cursor.execute("SELECT * FROM Products WHERE status = 'available'")
+        cursor.execute('SELECT * FROM Products ORDER BY created_at DESC')
     products = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return products
@@ -735,9 +735,7 @@ def product_details(product_id):
     if not product:
         flash("Product not found!")
         return redirect(url_for('index'))
-    if product.get('status') == 'sold':
-        flash('This item has been sold and is no longer available.')
-        return redirect(url_for('index'))
+    is_sold = product.get('status') == 'sold'
     image_list = []
     if product.get('images'):
         try:
@@ -769,40 +767,42 @@ def product_details(product_id):
 
     seller_phone = ''
     seller_email = ''
-    seller_contact_preference = 'whatsapp'
-    seller_id = product.get('seller_id')
-    if seller_id:
-        seller = firestore_db.fs_get_user(seller_id)
-        if seller:
-            seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
-            seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
-            seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
-        else:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            seller_row = cursor.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
-            conn.close()
-            if seller_row:
-                seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
-                seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
-                seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
-
-    listing_contact_method = product.get('buyer_contact_method') or 'whatsapp'
-
+    listing_contact_method = 'whatsapp'
     whatsapp_url = ''
     gmail_url = ''
     mailto_url = ''
-    if product.get('title'):
-        if seller_phone and listing_contact_method == 'whatsapp':
-            text = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
-            whatsapp_url = f"https://wa.me/{seller_phone}?text={quote(text)}"
-        elif seller_email and listing_contact_method == 'email':
-            subject = f"Interest in {product['title']}"
-            body = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
-            gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(seller_email)}&su={quote(subject)}&body={quote(body)}"
-            mailto_url = f"mailto:{seller_email}?subject={quote(subject)}&body={quote(body)}"
 
-    return render_template('product_details.html', product=product, image_list=image_list, questions=questions, seller_phone=seller_phone, seller_email=seller_email, seller_contact_preference=listing_contact_method, whatsapp_url=whatsapp_url, gmail_url=gmail_url, mailto_url=mailto_url)
+    if not is_sold:
+        seller_id = product.get('seller_id')
+        if seller_id:
+            seller = firestore_db.fs_get_user(seller_id)
+            if seller:
+                seller_phone = normalize_phone(seller.get('contact_phone', '') or seller.get('phone', ''))
+                seller_email = (seller.get('contact_email', '') or seller.get('email', '') or '').strip()
+                seller_contact_preference = seller.get('contact_preference', 'whatsapp') or 'whatsapp'
+            else:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                seller_row = cursor.execute('SELECT phone, email, contact_preference, contact_phone, contact_email FROM users WHERE user_id = ?', (seller_id,)).fetchone()
+                conn.close()
+                if seller_row:
+                    seller_phone = normalize_phone(seller_row.get('contact_phone', '') or seller_row.get('phone', ''))
+                    seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
+                    seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
+
+        listing_contact_method = product.get('buyer_contact_method') or 'whatsapp'
+
+        if product.get('title'):
+            if seller_phone and listing_contact_method == 'whatsapp':
+                text = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
+                whatsapp_url = f"https://wa.me/{seller_phone}?text={quote(text)}"
+            elif seller_email and listing_contact_method == 'email':
+                subject = f"Interest in {product['title']}"
+                body = f"Hi! I came across your listing for \"{product['title']}\" on Thrift. Is it still available?"
+                gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(seller_email)}&su={quote(subject)}&body={quote(body)}"
+                mailto_url = f"mailto:{seller_email}?subject={quote(subject)}&body={quote(body)}"
+
+    return render_template('product_details.html', product=product, image_list=image_list, questions=questions, seller_phone=seller_phone, seller_email=seller_email, seller_contact_preference=listing_contact_method, whatsapp_url=whatsapp_url, gmail_url=gmail_url, mailto_url=mailto_url, is_sold=is_sold)
 
 @app.route('/sell', methods=['GET', 'POST'])
 def sell():
@@ -1307,7 +1307,7 @@ def admin_dashboard():
                     sid = p.get('seller_id')
                     if sid:
                         seller_counts[sid] = seller_counts.get(sid, 0) + 1
-                listing_counts = seller_counts
+                listing_counts = {str(k): v for k, v in seller_counts.items()}
 
                 stats['total_users'] = len(users)
                 stats['active_listings'] = sum(1 for p in listings if p.get('status') == 'available')
@@ -1335,6 +1335,7 @@ def admin_dashboard():
                 backend = 'firestore'
         except Exception as e:
             logging.error(f"Admin dashboard Firestore error: {e}")
+            flash('Error loading dashboard data from Firestore.', 'error')
             backend = 'error'
 
     if not firestore_db.is_firestore_available():
@@ -1359,7 +1360,7 @@ def admin_dashboard():
                 listings = [l for l in listings if listing_search.lower() in (l.get('title') or '').lower()]
 
             listing_counts_rows = cursor.execute('SELECT seller_id, COUNT(*) as cnt FROM Products GROUP BY seller_id').fetchall()
-            listing_counts = {row['seller_id']: row['cnt'] for row in listing_counts_rows}
+            listing_counts = {str(row['seller_id']): row['cnt'] for row in listing_counts_rows}
 
             stats['total_users'] = cursor.execute('SELECT COUNT(*) AS total_users FROM users').fetchone()['total_users']
             stats['active_listings'] = cursor.execute("SELECT COUNT(*) AS active_listings FROM Products WHERE status = 'available'").fetchone()['active_listings']
