@@ -787,7 +787,7 @@ def product_details(product_id):
                 seller_email = (seller_row.get('contact_email', '') or seller_row.get('email', '') or '').strip()
                 seller_contact_preference = seller_row.get('contact_preference', 'whatsapp') or 'whatsapp'
 
-    listing_contact_method = product.get('buyer_contact_method') or seller_contact_preference
+    listing_contact_method = product.get('buyer_contact_method') or 'whatsapp'
 
     whatsapp_url = ''
     gmail_url = ''

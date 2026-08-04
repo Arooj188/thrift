@@ -331,7 +331,14 @@
                         <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
                         <a href="{{ gmail_url | safe }}"
                            onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
-                           class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Send Email</a>
+                           class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
+                    </div>
+                {% elif gmail_url %}
+                    <div style="margin-bottom: 30px;">
+                        <p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #767676; margin: 0 0 10px 0;">Preferred method: Email</p>
+                        <a href="{{ gmail_url | safe }}"
+                           onclick="var gmail='{{ gmail_url | safe }}'; var mailto='{{ mailto_url | safe }}'; var w=window.open(gmail,'_blank'); if(!w||w.closed||typeof w.closed==='undefined'){window.location.href=mailto;}"
+                           class="btn-submit" style="padding: 18px 32px; text-decoration: none; display: inline-block; background: #1c1c1c; color: #fbf9f6;">Contact Seller</a>
                     </div>
                 {% else %}
                     <p style="font-size: 13px; color: #767676; text-align: center; margin-bottom: 30px;">The seller has not provided contact details for this listing.</p>

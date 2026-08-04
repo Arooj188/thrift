@@ -32,7 +32,7 @@
 
     .hiw-steps {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        grid-template-columns: repeat(2, 1fr);
         gap: 20px;
     }
     .hiw-step {
@@ -46,16 +46,27 @@
         transform: translateY(-4px);
         box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
     }
+    .hiw-step-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
     .hiw-step-number {
-        font-size: 13px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #767676;
-        margin-bottom: 10px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #f2efea;
+        color: #1c1c1c;
+        font-size: 14px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
     }
     .hiw-step h3 {
-        margin: 0 0 10px 0;
+        margin: 0;
         font-size: 18px;
         font-weight: 700;
         color: #1c1c1c;
@@ -66,44 +77,93 @@
         line-height: 1.6;
         color: #555555;
     }
-    .hiw-step ul {
-        margin: 10px 0 0 0;
-        padding-left: 18px;
+
+    .hiw-guidelines {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 28px;
+    }
+    .hiw-guidelines h3 {
+        margin: 0 0 14px 0;
+        font-size: 18px;
+        font-weight: 700;
+        color: #1c1c1c;
+    }
+    .hiw-guidelines ul {
+        margin: 0;
+        padding-left: 20px;
         color: #555555;
         font-size: 14px;
-        line-height: 1.6;
+        line-height: 1.7;
     }
-    .hiw-step li {
-        margin-bottom: 4px;
+    .hiw-guidelines li + li {
+        margin-top: 6px;
     }
 
     .hiw-faq {
         margin-top: 20px;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
     }
     .hiw-faq-item {
         background: #ffffff;
         border: 1px solid #e5e7eb;
-        border-radius: 16px;
-        padding: 24px;
-        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        border-radius: 14px;
+        overflow: hidden;
+        transition: box-shadow 0.2s ease;
     }
-    .hiw-faq-item:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+    .hiw-faq-item.is-open {
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
     }
-    .hiw-faq-item h4 {
-        margin: 0 0 8px 0;
+    .hiw-faq-question {
+        width: 100%;
+        background: none;
+        border: none;
+        padding: 18px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        cursor: pointer;
+        font-family: inherit;
         font-size: 15px;
         font-weight: 700;
         color: #1c1c1c;
+        text-align: left;
+        line-height: 1.4;
     }
-    .hiw-faq-item p {
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.55;
+    .hiw-faq-question:hover {
+        color: #000000;
+    }
+    .hiw-faq-arrow {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        color: #767676;
+        transition: transform 250ms ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+    .hiw-faq-item.is-open .hiw-faq-arrow {
+        transform: rotate(180deg);
+    }
+    .hiw-faq-answer {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 260ms ease, opacity 260ms ease;
+        opacity: 0;
+    }
+    .hiw-faq-item.is-open .hiw-faq-answer {
+        opacity: 1;
+    }
+    .hiw-faq-answer-inner {
+        padding: 0 20px 18px 20px;
+        font-size: 14px;
+        line-height: 1.6;
         color: #555555;
     }
 
@@ -128,19 +188,15 @@
         max-width: 540px;
         margin: 0 auto 26px auto;
     }
-    .hiw-cta a.btn-sell {
+    .hiw-cta .btn-sell {
         display: inline-block;
         text-decoration: none;
         padding: 14px 28px;
         font-size: 13px;
     }
-    .hiw-cta a.btn-sell.hiw-btn-hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
-    }
 
     @media (prefers-reduced-motion: reduce) {
-        .hiw-step, .hiw-faq-item {
+        .hiw-step, .hiw-faq-item, .hiw-faq-answer, .hiw-faq-arrow {
             transition: none;
         }
     }
@@ -155,96 +211,128 @@
         .hiw-steps { grid-template-columns: 1fr; gap: 16px; }
         .hiw-step { padding: 18px; }
 
-        .hiw-faq { grid-template-columns: 1fr; gap: 16px; }
-        .hiw-faq-item { padding: 18px; }
+        .hiw-guidelines { padding: 18px; }
+
+        .hiw-faq { gap: 10px; }
+        .hiw-faq-question { padding: 16px; font-size: 14px; }
+        .hiw-faq-answer-inner { padding: 0 16px 16px 16px; }
 
         .hiw-cta { margin: 40px 0 20px 0; padding: 32px 24px; border-radius: 16px; }
         .hiw-cta h2 { font-size: 22px; }
         .hiw-cta p { font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
     }
+
+    @media (max-width: 640px) {
+        .hiw-hero h1 { font-size: 32px; }
+        .hiw-step h3 { font-size: 16px; }
+        .hiw-faq-question { font-size: 14px; }
+    }
 </style>
 
 <div class="hiw-hero">
     <h1>How It Works</h1>
-    <p>Buy and sell pre-loved fashion across Pakistan in a few simple steps.</p>
+    <p>Buy and sell pre-loved fashion across Pakistan in four simple steps.</p>
 </div>
 
 <h2 class="hiw-section-title">Marketplace Flow</h2>
 
 <div class="hiw-steps">
     <div class="hiw-step">
-        <div class="hiw-step-number">Step 1</div>
-        <h3>Create an Account</h3>
-        <p>Create a free account using your name, email, password, and WhatsApp number.</p>
-        <ul>
-            <li>List items for sale</li>
-            <li>Contact sellers</li>
-            <li>Manage your own listings</li>
-        </ul>
+        <div class="hiw-step-header">
+            <div class="hiw-step-number">1</div>
+            <h3>Create an Account</h3>
+        </div>
+        <p>Sign up for free to browse, list items, and contact sellers.</p>
     </div>
 
     <div class="hiw-step">
-        <div class="hiw-step-number">Step 2</div>
-        <h3>Browse or List Items</h3>
-        <p>Buyers can browse all publicly available listings. Sellers can create listings by adding photos, item details, condition, price, and preferred buyer contact method.</p>
+        <div class="hiw-step-header">
+            <div class="hiw-step-number">2</div>
+            <h3>Browse or List</h3>
+        </div>
+        <p>Browse available items or post your own with photos, price, and item details.</p>
     </div>
 
     <div class="hiw-step">
-        <div class="hiw-step-number">Step 3</div>
-        <h3>Contact the Seller</h3>
-        <p>Only registered and logged-in users can contact sellers. This helps protect sellers' privacy and reduces spam. Buyers simply log in, choose a listing, and contact the seller using the seller's preferred contact method.</p>
+        <div class="hiw-step-header">
+            <div class="hiw-step-number">3</div>
+            <h3>Contact the Seller</h3>
+        </div>
+        <p>Use the seller's preferred contact method to discuss the item, ask questions, and finalize the details.</p>
     </div>
 
     <div class="hiw-step">
-        <div class="hiw-step-number">Step 4</div>
-        <h3>Complete the Exchange</h3>
-        <p>Once both parties agree, arrange payment directly, decide on delivery or meetup, and mark the transaction as complete. Thrift does not process payments or shipping.</p>
+        <div class="hiw-step-header">
+            <div class="hiw-step-number">4</div>
+            <h3>Complete the Exchange</h3>
+        </div>
+        <p>Arrange payment and delivery directly with the seller.</p>
     </div>
 </div>
 
-<h2 class="hiw-section-title">Seller Responsibility</h2>
+<h2 class="hiw-section-title">Community Guidelines</h2>
 
-<div class="hiw-step" style="max-width: 100%;">
-    <p>Once an item is sold, mark it as sold or remove the listing so buyers know it is no longer available.</p>
-</div>
-
-<h2 class="hiw-section-title">Community & Safety</h2>
-
-<div class="hiw-step" style="max-width: 100%;">
-    <p>To keep the marketplace safe for everyone:</p>
+<div class="hiw-guidelines">
+    <h3>Community Guidelines</h3>
     <ul>
-        <li>Buyers must create an account before contacting sellers.</li>
-        <li>Sellers should provide accurate descriptions and photos.</li>
-        <li>Thrift reserves the right to remove listings that are misleading, inappropriate, fraudulent, prohibited, or violate the platform's guidelines.</li>
+        <li>Provide accurate descriptions and clear photos.</li>
+        <li>Treat buyers and sellers with respect.</li>
+        <li>Report suspicious or inappropriate listings.</li>
+        <li>Listings that violate our community guidelines may be removed.</li>
     </ul>
 </div>
 
-<h2 class="hiw-section-title">FAQ</h2>
+<h2 class="hiw-section-title">Frequently Asked Questions</h2>
 
 <div class="hiw-faq">
     <div class="hiw-faq-item">
-        <h4>Do I need an account to contact a seller?</h4>
-        <p>Yes. You can browse listings without an account, but you must sign up or log in before contacting any seller.</p>
+        <button class="hiw-faq-question" type="button" aria-expanded="false">
+            <span>Do I need an account to contact a seller?</span>
+            <span class="hiw-faq-arrow" aria-hidden="true">▶</span>
+        </button>
+        <div class="hiw-faq-answer">
+            <div class="hiw-faq-answer-inner">Yes. You can browse listings without an account, but you must sign up or log in before contacting sellers.</div>
+        </div>
     </div>
 
     <div class="hiw-faq-item">
-        <h4>How do I list an item?</h4>
-        <p>Click "List Item for Sale", complete the form, upload photos, and publish.</p>
+        <button class="hiw-faq-question" type="button" aria-expanded="false">
+            <span>How do I list an item?</span>
+            <span class="hiw-faq-arrow" aria-hidden="true">▶</span>
+        </button>
+        <div class="hiw-faq-answer">
+            <div class="hiw-faq-answer-inner">Click "List Item for Sale", complete the form, upload photos, and publish your listing.</div>
+        </div>
     </div>
 
     <div class="hiw-faq-item">
-        <h4>How are payments handled?</h4>
-        <p>Payments are arranged directly between buyers and sellers. Thrift does not process payments.</p>
+        <button class="hiw-faq-question" type="button" aria-expanded="false">
+            <span>How are payments handled?</span>
+            <span class="hiw-faq-arrow" aria-hidden="true">▶</span>
+        </button>
+        <div class="hiw-faq-answer">
+            <div class="hiw-faq-answer-inner">Payments are arranged directly between buyers and sellers. Thrift does not process payments.</div>
+        </div>
     </div>
 
     <div class="hiw-faq-item">
-        <h4>Does Thrift charge any fees?</h4>
-        <p>No. Listing items and using the marketplace is completely free.</p>
+        <button class="hiw-faq-question" type="button" aria-expanded="false">
+            <span>Does Thrift charge any fees?</span>
+            <span class="hiw-faq-arrow" aria-hidden="true">▶</span>
+        </button>
+        <div class="hiw-faq-answer">
+            <div class="hiw-faq-answer-inner">No. Listing items and using the marketplace is completely free.</div>
+        </div>
     </div>
 
     <div class="hiw-faq-item">
-        <h4>What happens after I sell my item?</h4>
-        <p>Mark the listing as sold or delete it so other buyers know it is no longer available.</p>
+        <button class="hiw-faq-question" type="button" aria-expanded="false">
+            <span>What should I do after selling an item?</span>
+            <span class="hiw-faq-arrow" aria-hidden="true">▶</span>
+        </button>
+        <div class="hiw-faq-answer">
+            <div class="hiw-faq-answer-inner">Mark your item as Sold and keep the listing visible for 3–5 days before deleting it.</div>
+        </div>
     </div>
 </div>
 
@@ -258,18 +346,42 @@
     {% endif %}
 </div>
 
-<script src="{{ url_for('static', filename='js/how_it_works.js') }}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    var ctaBtn = document.querySelector('.hiw-cta a.btn-sell');
-    if (ctaBtn) {
-        ctaBtn.addEventListener('mouseenter', function () {
-            ctaBtn.classList.add('hiw-btn-hover');
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var faqItems = document.querySelectorAll('.hiw-faq-item');
+
+        faqItems.forEach(function (item) {
+            var button = item.querySelector('.hiw-faq-question');
+            var answer = item.querySelector('.hiw-faq-answer');
+
+            button.addEventListener('click', function () {
+                var isOpen = item.classList.contains('is-open');
+
+                faqItems.forEach(function (otherItem) {
+                    if (otherItem !== item) {
+                        otherItem.classList.remove('is-open');
+                        var otherButton = otherItem.querySelector('.hiw-faq-question');
+                        var otherAnswer = otherItem.querySelector('.hiw-faq-answer');
+                        if (otherButton) otherButton.setAttribute('aria-expanded', 'false');
+                        if (otherAnswer) otherAnswer.style.maxHeight = null;
+                    }
+                });
+
+                if (isOpen) {
+                    item.classList.remove('is-open');
+                    button.setAttribute('aria-expanded', 'false');
+                    answer.style.maxHeight = null;
+                } else {
+                    item.classList.add('is-open');
+                    button.setAttribute('aria-expanded', 'true');
+                    answer.style.maxHeight = answer.scrollHeight + 'px';
+                }
+            });
         });
-        ctaBtn.addEventListener('mouseleave', function () {
-            ctaBtn.classList.remove('hiw-btn-hover');
-        });
-    }
-});
+    });
+})();
 </script>
 {% endblock %}
